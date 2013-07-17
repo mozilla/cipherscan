@@ -2,8 +2,8 @@
 
 DOBENCHMARK=0
 BENCHMARKITER=10
-#OPENSSLBIN="/home/ulfr/Code/openssl/apps/openssl"
-OPENSSLBIN=$(which openssl)
+OPENSSLBIN="/home/ulfr/Code/openssl/apps/openssl"
+#OPENSSLBIN=$(which openssl)
 REQUEST="GET / HTTP/1.1
 Host: $TARGET
 
@@ -22,12 +22,12 @@ verbose() {
 test_cipher_on_target() {
     local sslcommand=$@
     local tmp=$(mktemp)
-    $sslcommand 1>$tmp 2>/dev/null << EOF
+    $sslcommand 1>"$tmp" 2>/dev/null << EOF
 $REQUEST
 EOF
     # Parse the result
     result=$(grep "New, " $tmp|awk '{print $5}')
-    rm $tmp
+    rm "$tmp"
     if [ "$result" == '(NONE)' ]; then
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
