@@ -2,8 +2,8 @@
 
 DOBENCHMARK=0
 BENCHMARKITER=10
-OPENSSLBIN="/home/ulfr/Code/openssl/apps/openssl"
-#OPENSSLBIN=$(which openssl)
+#OPENSSLBIN="/home/ulfr/Code/openssl/apps/openssl"
+OPENSSLBIN=$(which openssl)
 REQUEST="GET / HTTP/1.1
 Host: $TARGET
 
