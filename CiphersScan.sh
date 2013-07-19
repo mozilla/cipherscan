@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-DOBENCHMARK=0
-BENCHMARKITER=10
-#OPENSSLBIN="/home/ulfr/Code/openssl/apps/openssl"
-OPENSSLBIN=$(which openssl)
+DOBENCHMARK=1
+BENCHMARKITER=30
+OPENSSLBIN="./openssl"
 REQUEST="GET / HTTP/1.1
 Host: $TARGET
 
@@ -52,8 +51,8 @@ EOF
     # Time interval in nanoseconds
     local t="$(($(date +%s%N) - t))"
     verbose "Benchmarking done in $t nanoseconds"
-    # Milliseconds
-    cipherbenchms="$((t/1000000/$BENCHMARKITER))"
+    # Microseconds
+    cipherbenchms="$((t/1000/$BENCHMARKITER))"
 }
 
 
@@ -92,7 +91,6 @@ if [ ! -z $2 ]; then
     fi
 fi
 
-echo
 cipherspref=();
 results=()
 get_cipher_pref "ALL"
@@ -100,19 +98,24 @@ ctr=1
 for cipher in "${cipherspref[@]}"; do
     if [ $DOBENCHMARK -eq 1 ]; then
         bench_cipher "$cipher"
-        r=$(echo "$ctr $cipher $cipherbenchms"|awk '{printf "%-2d) %-30s avg_handshake= %-5d ms\n",$1,$2,$3}')
+        r="$ctr $cipher $cipherbenchms"
     else
-        r=$(echo "$ctr $cipher"|awk '{printf "%-2d) %-30s\n",$1,$2}')
+        r="$ctr $cipher"
     fi
     results=("${results[@]}" "$r")
     ctr=$((ctr+1))
 done
 
-echo
-echo "Ciphersuites sorted by server preference"
+if [ $DOBENCHMARK -eq 1 ]; then
+    header="prio ciphersuite avg_handshake_microsec"
+else
+    header="prio ciphersuite"
+fi
+ctr=0
 for result in "${results[@]}"; do
+    if [ $ctr -eq 0 ]; then
+        echo $header
+        ctr=$((ctr+1))
+    fi
     echo $result
-done
-
-echo
-echo R | $OPENSSLBIN s_client -connect $TARGET 2>/dev/null| grep 'Secure Renegotiation'|sort|uniq
+done|column -t
