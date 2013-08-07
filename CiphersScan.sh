@@ -26,13 +26,13 @@ test_cipher_on_target() {
 $REQUEST
 EOF
     # Parse the result
-    result=$(grep "New, " $tmp|awk '{print $5}')
+    result="$(grep "New, " $tmp|awk '{print $5}') $(grep -E "^\s+Protocol\s+:" $tmp|awk '{print $3}')"
     rm "$tmp"
-    if [ -z $result ]; then
+    if [ -z "$result" ]; then
         verbose "handshake failed, no ciphersuite was returned"
         result='ConnectionFailure'
         return 2
-    elif [ "$result" == '(NONE)' ]; then
+    elif [ "$result" == '(NONE) ' ]; then
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
     else
@@ -74,7 +74,8 @@ get_cipher_pref() {
     cipherspref=("${cipherspref[@]}" "$result")
     # If the connection succeeded with the current cipher, benchmark and store
     if [ $success -eq 0 ]; then
-        get_cipher_pref "!$result:$ciphersuite"
+        pciph=$(echo $result|awk '{print $1}')
+        get_cipher_pref "!$pciph:$ciphersuite"
         return 0
     fi
 }
@@ -108,8 +109,9 @@ results=()
 get_cipher_pref "ALL"
 ctr=1
 for cipher in "${cipherspref[@]}"; do
+    pciph=$(echo $cipher|awk '{print $1}')
     if [ $DOBENCHMARK -eq 1 ]; then
-        bench_cipher "$cipher"
+        bench_cipher "$pciph"
         r="$ctr $cipher $cipherbenchms"
     else
         r="$ctr $cipher"
@@ -119,9 +121,9 @@ for cipher in "${cipherspref[@]}"; do
 done
 
 if [ $DOBENCHMARK -eq 1 ]; then
-    header="prio ciphersuite avg_handshake_microsec"
+    header="prio ciphersuite protocol avg_handshake_microsec"
 else
-    header="prio ciphersuite"
+    header="prio ciphersuite protocol"
 fi
 ctr=0
 for result in "${results[@]}"; do
