@@ -26,13 +26,13 @@ test_cipher_on_target() {
 $REQUEST
 EOF
     # Parse the result
-    result="$(grep "New, " $tmp|awk '{print $5}') $(grep -E "^\s+Protocol\s+:" $tmp|awk '{print $3}')"
+    result="$(grep "New, " $tmp|awk '{print $5}') $(grep -E "^\s+Protocol\s+:" $tmp|awk '{print $3}') $(grep 'Server Temp Key' $tmp|awk '{print $4$5$6$7}')"
     rm "$tmp"
     if [ -z "$result" ]; then
         verbose "handshake failed, no ciphersuite was returned"
         result='ConnectionFailure'
         return 2
-    elif [ "$result" == '(NONE) ' ]; then
+    elif [ "$result" == '(NONE)  ' ]; then
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
     else
@@ -121,9 +121,9 @@ for cipher in "${cipherspref[@]}"; do
 done
 
 if [ $DOBENCHMARK -eq 1 ]; then
-    header="prio ciphersuite protocol avg_handshake_microsec"
+    header="prio ciphersuite protocol pfs_keysize avg_handshake_microsec"
 else
-    header="prio ciphersuite protocol"
+    header="prio ciphersuite protocol pfs_keysize"
 fi
 ctr=0
 for result in "${results[@]}"; do
