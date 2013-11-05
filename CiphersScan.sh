@@ -131,7 +131,7 @@ for result in "${results[@]}"; do
         echo $header
         ctr=$((ctr+1))
     fi
-    echo $result
+    echo $result|grep -v '(NONE)'
 done|column -t
 
 if [ $ALLCIPHERS -gt 0 ]; then
