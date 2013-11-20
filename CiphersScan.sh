@@ -170,17 +170,16 @@ for result in "${results[@]}"; do
     echo $result|grep -v '(NONE)'
 done|column -t
 
+# If asked, test every single cipher individually
 if [ $ALLCIPHERS -gt 0 ]; then
     echo; echo "All accepted ciphersuites"
-    for cipher in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
-        osslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -connect $TARGET -cipher $cipher"
+    for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
+        r="fail"
+        osslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -connect $TARGET -cipher $c"
         test_cipher_on_target "$osslcommand"
-        r=$?
-        if [ $r -eq 0 ]; then
-            echo -en '\E[40;32m'"OK"; tput sgr0
-        else
-            echo -en '\E[40;31m'"KO"; tput sgr0
+        if [ $? -eq 0 ]; then
+            r="pass"
         fi
-        echo " $cipher"
+        echo "$c $r"|awk '{printf "%-35s %s\n",$1,$2}'
     done
 fi
