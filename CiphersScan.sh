@@ -97,6 +97,7 @@ EOF
 # Connect to the target and retrieve the chosen cipher
 # recursively until the connection fails
 get_cipher_pref() {
+    echo -n '.'
     local ciphersuite="$1"
     local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -connect $TARGET -cipher $ciphersuite"
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
@@ -140,7 +141,7 @@ results=()
 
 # Call to the recursive loop that retrieves the cipher preferences
 get_cipher_pref $CIPHERSUITE
-
+echo
 # Display the results
 ctr=1
 for cipher in "${cipherspref[@]}"; do
