@@ -23,21 +23,49 @@ verbose() {
 # Connect to a target host with the selected ciphersuite
 test_cipher_on_target() {
     local sslcommand=$@
-    local tmp=$(mktemp)
-    $sslcommand 1>"$tmp" 2>/dev/null << EOF
+    cipher=""
+    protocols=""
+    pfs=""
+    for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
+    do
+        local tmp=$(mktemp)
+        $sslcommand $tls_version 1>"$tmp" 2>/dev/null << EOF
 $REQUEST
 EOF
-    # Parse the result
-    result="$(grep "New, " $tmp|awk '{print $5}') $(grep -E "^\s+Protocol\s+:" $tmp|awk '{print $3}') $(grep 'Server Temp Key' $tmp|awk '{print $4$5$6$7}')"
-    rm "$tmp"
-    if [ -z "$result" ]; then
+        current_cipher=$(grep "New, " $tmp|awk '{print $5}')
+        current_pfs=$(grep 'Server Temp Key' $tmp|awk '{print $4$5$6$7}')
+        current_protocol=$(grep -E "^\s+Protocol\s+:" $tmp|awk '{print $3}')
+        if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
+            # connection failed, try again with next TLS version
+            continue
+        fi
+        # connection succeeded, add TLS version to positive results
+        if [ -z "$protocols" ]; then
+            protocols=$current_protocol
+        else
+            protocols="$protocols,$current_protocol"
+        fi
+        cipher=$current_cipher
+        pfs=$current_pfs
+        # grab the cipher and PFS key size
+        rm "$tmp"
+    done
+    # if cipher is empty, that means none of the TLS version worked with
+    # the current cipher
+    if [ -z "$cipher" ]; then
         verbose "handshake failed, no ciphersuite was returned"
         result='ConnectionFailure'
         return 2
-    elif [ "$result" == '(NONE)  ' ]; then
+
+    # if cipher contains NONE, the cipher wasn't accepted
+    elif [ "$cipher" == '(NONE)  ' ]; then
+        result="$cipher $protocols $pfs"
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
+
+    # the connection succeeded
     else
+        result="$cipher $protocols $pfs"
         verbose "handshake succeeded, server returned ciphersuite '$result'"
         return 0
     fi
@@ -67,15 +95,16 @@ EOF
 
 
 # Connect to the target and retrieve the chosen cipher
+# recursively until the connection fails
 get_cipher_pref() {
     local ciphersuite="$1"
     local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -connect $TARGET -cipher $ciphersuite"
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     test_cipher_on_target "$sslcommand"
     local success=$?
-    cipherspref=("${cipherspref[@]}" "$result")
     # If the connection succeeded with the current cipher, benchmark and store
     if [ $success -eq 0 ]; then
+        cipherspref=("${cipherspref[@]}" "$result")
         pciph=$(echo $result|awk '{print $1}')
         get_cipher_pref "!$pciph:$ciphersuite"
         return 0
@@ -111,6 +140,8 @@ results=()
 
 # Call to the recursive loop that retrieves the cipher preferences
 get_cipher_pref $CIPHERSUITE
+
+# Display the results
 ctr=1
 for cipher in "${cipherspref[@]}"; do
     pciph=$(echo $cipher|awk '{print $1}')
@@ -125,9 +156,9 @@ for cipher in "${cipherspref[@]}"; do
 done
 
 if [ $DOBENCHMARK -eq 1 ]; then
-    header="prio ciphersuite protocol pfs_keysize avg_handshake_microsec"
+    header="prio ciphersuite protocols pfs_keysize avg_handshake_microsec"
 else
-    header="prio ciphersuite protocol pfs_keysize"
+    header="prio ciphersuite protocols pfs_keysize"
 fi
 ctr=0
 for result in "${results[@]}"; do
