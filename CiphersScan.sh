@@ -5,6 +5,7 @@ BENCHMARKITER=30
 OPENSSLBIN="./openssl"
 #OPENSSLBIN="/usr/bin/openssl"
 TIMEOUT=10
+CIPHERSUITE="ALL:COMPLEMENTOFALL"
 REQUEST="GET / HTTP/1.1
 Host: $TARGET
 
@@ -97,7 +98,7 @@ ALLCIPHERS=0
 if [ ! -z $2 ]; then
     if [ "$2" == "-v" ]; then
         VERBOSE=1
-        echo "Loading $($OPENSSLBIN ciphers -v ALL 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
+        echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
         $OPENSSLBIN ciphers ALL 2>/dev/null
     fi
     if [ "$2" == "-a" ]; then
@@ -107,7 +108,9 @@ fi
 
 cipherspref=();
 results=()
-get_cipher_pref "ALL"
+
+# Call to the recursive loop that retrieves the cipher preferences
+get_cipher_pref $CIPHERSUITE
 ctr=1
 for cipher in "${cipherspref[@]}"; do
     pciph=$(echo $cipher|awk '{print $1}')
