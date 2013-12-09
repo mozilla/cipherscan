@@ -6,12 +6,36 @@ OPENSSLBIN="./openssl"
 #OPENSSLBIN="/usr/bin/openssl"
 TIMEOUT=10
 CIPHERSUITE="ALL:COMPLEMENTOFALL"
+TARGET=$1
+VERBOSE=0
+ALLCIPHERS=0
+OUTPUTFORMAT="terminal"
 REQUEST="GET / HTTP/1.1
 Host: $TARGET
 Connection: close
 
 
 "
+
+
+usage() {
+    echo -e "usage: $0 <target:port>
+
+$0 attempts to connect to a target site using all the ciphersuites it knowns.
+Julien Vehent [:ulfr] - https://github.com/jvehent/cipherscan
+
+example: $ ./CipherScan.sh www.google.com:443
+
+Use only one of the options below:
+-v\tincrease verbosity
+-a\ttest all known ciphers individually at the end
+-json\toutput results in json format
+
+OpenSSL path can be changed in the OPENSSLBIN variable
+Benchmarking can be enabled in the DOBENCHMARK variable
+"
+    exit 1
+}
 
 
 verbose() {
@@ -113,6 +137,7 @@ get_cipher_pref() {
     fi
 }
 
+
 display_results_in_terminal() {
     # Display the results
     ctr=1
@@ -143,32 +168,9 @@ display_results_in_terminal() {
     done|column -t
 }
 
+
 display_results_in_json() {
     # Display the results in json
-    # {
-    #    "target": "www.google.com:443",
-    #    "date": "Mon, 09 Dec 2013 09:34:45 -0500",
-    #    "ciphersuite": [
-    #        {
-    #            "cipher": "AES128-SHA",
-    #            "protocols": [
-    #                "tls1",
-    #                "tls1.1",
-    #                "tls1.2"
-    #            ],
-    #            "pfs": "1024bits"
-    #        },
-    #        {
-    #            "cipher": "AES256-SHA",
-    #            "protocols": [
-    #                "tls1",
-    #                "tls1.1",
-    #                "tls1.2"
-    #            ],
-    #            "pfs": "1024bits"
-    #        }
-    #    ]
-    # }
     ctr=0
     echo -n "{\"target\":\"$TARGET\",\"date\":\"$(date -R)\",\"ciphersuite\": ["
     for cipher in "${cipherspref[@]}"; do
@@ -184,30 +186,19 @@ display_results_in_json() {
 }
 
 
-if [ -z $1 ]; then
-    echo "
-usage: $0 <target:port> <-v>
-
-$0 attempts to connect to a target site using all the ciphersuites it knowns.
-jvehent - ulfr -  2013
-"
-    exit 1
-fi
-TARGET=$1
-VERBOSE=0
-ALLCIPHERS=0
-OUTPUTFORMAT="terminal"
+[[ -z $1 || "$1" == "-h" || "$1" == "--help" ]] && usage
 if [ ! -z $2 ]; then
     if [ "$2" == "-v" ]; then
         VERBOSE=1
         echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
         $OPENSSLBIN ciphers ALL 2>/dev/null
-    fi
-    if [ "$2" == "-a" ]; then
+    elif [ "$2" == "-a" ]; then
         ALLCIPHERS=1
-    fi
-    if [ "$2" == "-json" ]; then
+    elif [ "$2" == "-json" ]; then
         OUTPUTFORMAT="json"
+    else
+        echo "ERROR: unknown option '$2'"; echo
+        usage
     fi
 fi
 
