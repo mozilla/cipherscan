@@ -12,15 +12,22 @@ Options
 -------
 Enable benchmarking by setting DOBENCHMARK to 1 at the top of the script.
 
+You can use one of the options below (only one. yes, I know...)
+
 Use '-v' to get more stuff to read.
 
 Use '-a' to force openssl to test every single cipher it know.
 
+Use '-json' to output the results in json format
+```
+$ ./CiphersScan.sh www.google.com:443 -json
+```
 
 Example
 -------
 
 ```
+$ ./CiphersScan.sh www.google.com:443
 prio  ciphersuite                  protocols                    pfs_keysize
 1     ECDHE-RSA-AES128-GCM-SHA256  SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
 2     ECDHE-RSA-RC4-SHA            SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits

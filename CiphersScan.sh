@@ -98,7 +98,7 @@ EOF
 # Connect to the target and retrieve the chosen cipher
 # recursively until the connection fails
 get_cipher_pref() {
-    echo -n '.'
+    [ "$OUTPUTFORMAT" == "terminal" ] && echo -n '.'
     local ciphersuite="$1"
     local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -connect $TARGET -cipher $ciphersuite"
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
@@ -111,6 +111,76 @@ get_cipher_pref() {
         get_cipher_pref "!$pciph:$ciphersuite"
         return 0
     fi
+}
+
+display_results_in_terminal() {
+    # Display the results
+    ctr=1
+    for cipher in "${cipherspref[@]}"; do
+        pciph=$(echo $cipher|awk '{print $1}')
+        if [ $DOBENCHMARK -eq 1 ]; then
+            bench_cipher "$pciph"
+            r="$ctr $cipher $cipherbenchms"
+        else
+            r="$ctr $cipher"
+        fi
+        results=("${results[@]}" "$r")
+        ctr=$((ctr+1))
+    done
+
+    if [ $DOBENCHMARK -eq 1 ]; then
+        header="prio ciphersuite protocols pfs_keysize avg_handshake_microsec"
+    else
+        header="prio ciphersuite protocols pfs_keysize"
+    fi
+    ctr=0
+    for result in "${results[@]}"; do
+        if [ $ctr -eq 0 ]; then
+            echo $header
+            ctr=$((ctr+1))
+        fi
+        echo $result|grep -v '(NONE)'
+    done|column -t
+}
+
+display_results_in_json() {
+    # Display the results in json
+    # {
+    #    "target": "www.google.com:443",
+    #    "date": "Mon, 09 Dec 2013 09:34:45 -0500",
+    #    "ciphersuite": [
+    #        {
+    #            "cipher": "AES128-SHA",
+    #            "protocols": [
+    #                "tls1",
+    #                "tls1.1",
+    #                "tls1.2"
+    #            ],
+    #            "pfs": "1024bits"
+    #        },
+    #        {
+    #            "cipher": "AES256-SHA",
+    #            "protocols": [
+    #                "tls1",
+    #                "tls1.1",
+    #                "tls1.2"
+    #            ],
+    #            "pfs": "1024bits"
+    #        }
+    #    ]
+    # }
+    ctr=0
+    echo -n "{\"target\":\"$TARGET\",\"date\":\"$(date -R)\",\"ciphersuite\": ["
+    for cipher in "${cipherspref[@]}"; do
+        [ $ctr -gt 0 ] && echo -n ','
+        echo -n "{\"cipher\":\"$(echo $cipher|awk '{print $1}')\","
+        echo -n "\"protocols\":[\"$(echo $cipher|awk '{print $2}'|sed 's/,/","/g')\"],"
+        pfs=$(echo $cipher|awk '{print $3}')
+        [ "$pfs" == "" ] && pfs="None"
+        echo -n "\"pfs\":\"$pfs\"}"
+        ctr=$((ctr+1))
+    done
+    echo ']}'
 }
 
 
@@ -126,6 +196,7 @@ fi
 TARGET=$1
 VERBOSE=0
 ALLCIPHERS=0
+OUTPUTFORMAT="terminal"
 if [ ! -z $2 ]; then
     if [ "$2" == "-v" ]; then
         VERBOSE=1
@@ -135,6 +206,9 @@ if [ ! -z $2 ]; then
     if [ "$2" == "-a" ]; then
         ALLCIPHERS=1
     fi
+    if [ "$2" == "-json" ]; then
+        OUTPUTFORMAT="json"
+    fi
 fi
 
 cipherspref=();
@@ -142,34 +216,13 @@ results=()
 
 # Call to the recursive loop that retrieves the cipher preferences
 get_cipher_pref $CIPHERSUITE
-echo
-# Display the results
-ctr=1
-for cipher in "${cipherspref[@]}"; do
-    pciph=$(echo $cipher|awk '{print $1}')
-    if [ $DOBENCHMARK -eq 1 ]; then
-        bench_cipher "$pciph"
-        r="$ctr $cipher $cipherbenchms"
-    else
-        r="$ctr $cipher"
-    fi
-    results=("${results[@]}" "$r")
-    ctr=$((ctr+1))
-done
 
-if [ $DOBENCHMARK -eq 1 ]; then
-    header="prio ciphersuite protocols pfs_keysize avg_handshake_microsec"
+if [ "$OUTPUTFORMAT" == "json" ]; then
+    display_results_in_json
 else
-    header="prio ciphersuite protocols pfs_keysize"
+    echo
+    display_results_in_terminal
 fi
-ctr=0
-for result in "${results[@]}"; do
-    if [ $ctr -eq 0 ]; then
-        echo $header
-        ctr=$((ctr+1))
-    fi
-    echo $result|grep -v '(NONE)'
-done|column -t
 
 # If asked, test every single cipher individually
 if [ $ALLCIPHERS -gt 0 ]; then
