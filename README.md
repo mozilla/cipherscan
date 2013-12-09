@@ -2,7 +2,7 @@ CipherScan
 ==========
 A very simple way to find out which SSL ciphersuites are supported by a target.
 
-Run: ./CipherScan.sh www.google.com:443
+Run: ./cipherscan www.google.com:443
 And watch.
 
 The newer your version of openssl, the better results you'll get. Older versions
@@ -20,14 +20,14 @@ Use '-a' to force openssl to test every single cipher it know.
 
 Use '-json' to output the results in json format
 ```
-$ ./CiphersScan.sh www.google.com:443 -json
+$ ./cipherscan www.google.com:443 -json
 ```
 
 Example
 -------
 
 ```
-$ ./CiphersScan.sh www.google.com:443
+$ ./cipherscan www.google.com:443
 prio  ciphersuite                  protocols                    pfs_keysize
 1     ECDHE-RSA-AES128-GCM-SHA256  SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
 2     ECDHE-RSA-RC4-SHA            SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits

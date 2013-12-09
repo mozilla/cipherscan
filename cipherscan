@@ -24,12 +24,12 @@ usage() {
 $0 attempts to connect to a target site using all the ciphersuites it knowns.
 Julien Vehent [:ulfr] - https://github.com/jvehent/cipherscan
 
-example: $ ./CipherScan.sh www.google.com:443
+example: $ $0 www.google.com:443
 
 Use only one of the options below:
--v\tincrease verbosity
--a\ttest all known ciphers individually at the end
--json\toutput results in json format
+-v     increase verbosity
+-a     test all known ciphers individually at the end
+-json  output results in json format
 
 OpenSSL path can be changed in the OPENSSLBIN variable
 Benchmarking can be enabled in the DOBENCHMARK variable
