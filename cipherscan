@@ -62,6 +62,7 @@ EOF
         current_protocol=$(grep -E "^\s+Protocol\s+:" $tmp|awk '{print $3}')
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
             # connection failed, try again with next TLS version
+            rm "$tmp"
             continue
         fi
         # connection succeeded, add TLS version to positive results
