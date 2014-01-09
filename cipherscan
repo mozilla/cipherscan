@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# Author: Julien Vehent [:ulfr] - 2013
+
 DOBENCHMARK=0
 BENCHMARKITER=30
-OPENSSLBIN="./openssl"
-#OPENSSLBIN="/usr/bin/openssl"
+OPENSSLBIN="$(dirname $0)/openssl"
 TIMEOUT=10
 CIPHERSUITE="ALL:COMPLEMENTOFALL"
 TARGET=$1
