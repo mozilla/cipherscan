@@ -10,7 +10,13 @@ BENCHMARKITER=30
 OPENSSLBIN="$(dirname $0)/openssl"
 TIMEOUT=10
 CIPHERSUITE="ALL:COMPLEMENTOFALL"
-TARGET=$1
+HOST=$(sed -e 's/:.*//'<<<"${@: -1}")
+PORT=$(sed -e 's/.*://'<<<"${@: -1}")
+if [ "$HOST" = "$PORT" ]; then
+    PORT=443
+fi
+TARGET=$HOST:$PORT
+SCLIENTARGS=$(sed -e "s/${@: -1}//" -e "s/-v//" -e "s/-a//" -e "s/-json//" <<<"$@")
 VERBOSE=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
@@ -23,17 +29,24 @@ Connection: close
 
 
 usage() {
-    echo -e "usage: $0 <target:port>
+    echo -e "usage: $0 [-a|-v|-json] [openssl s_client args] <target:port>
 
 $0 attempts to connect to a target site using all the ciphersuites it knowns.
 Julien Vehent [:ulfr] - https://github.com/jvehent/cipherscan
 
+Port defaults to 443
+
 example: $ $0 www.google.com:443
 
-Use only one of the options below:
+Use one of the options below as the first argument:
 -v     increase verbosity
 -a     test all known ciphers individually at the end
 -json  output results in json format
+
+The rest of the arguments will be interpreted as openssl s_client argument.
+This enables checking smtp/imap/pop3/ftp/xmpp via -starttls
+
+example: $0 -starttls xmpp jabber.ccc.de:5222
 
 OpenSSL path can be changed in the OPENSSLBIN variable
 Benchmarking can be enabled in the DOBENCHMARK variable
@@ -105,7 +118,7 @@ EOF
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
     local ciphersuite="$1"
-    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -connect $TARGET -cipher $ciphersuite"
+    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
@@ -129,7 +142,7 @@ EOF
 get_cipher_pref() {
     [ "$OUTPUTFORMAT" == "terminal" ] && echo -n '.'
     local ciphersuite="$1"
-    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -connect $TARGET -cipher $ciphersuite"
+    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     test_cipher_on_target "$sslcommand"
     local success=$?
@@ -193,17 +206,14 @@ display_results_in_json() {
 
 [[ -z $1 || "$1" == "-h" || "$1" == "--help" ]] && usage
 if [ ! -z $2 ]; then
-    if [ "$2" == "-v" ]; then
+    if [ "$1" == "-v" ]; then
         VERBOSE=1
         echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
         $OPENSSLBIN ciphers ALL 2>/dev/null
-    elif [ "$2" == "-a" ]; then
+    elif [ "$1" == "-a" ]; then
         ALLCIPHERS=1
-    elif [ "$2" == "-json" ]; then
+    elif [ "$1" == "-json" ]; then
         OUTPUTFORMAT="json"
-    else
-        echo "ERROR: unknown option '$2'"; echo
-        usage
     fi
 fi
 
@@ -225,7 +235,7 @@ if [ $ALLCIPHERS -gt 0 ]; then
     echo; echo "All accepted ciphersuites"
     for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
         r="fail"
-        osslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -connect $TARGET -cipher $c"
+        osslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
         test_cipher_on_target "$osslcommand"
         if [ $? -eq 0 ]; then
             r="pass"
