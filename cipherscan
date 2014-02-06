@@ -10,13 +10,7 @@ BENCHMARKITER=30
 OPENSSLBIN="$(dirname $0)/openssl"
 TIMEOUT=10
 CIPHERSUITE="ALL:COMPLEMENTOFALL"
-HOST=$(sed -e 's/:.*//'<<<"${@: -1}")
-PORT=$(sed -e 's/.*://'<<<"${@: -1}")
-if [ "$HOST" = "$PORT" ]; then
-    PORT=443
-fi
-TARGET=$HOST:$PORT
-SCLIENTARGS=$(sed -e "s/${@: -1}//" -e "s/-v//" -e "s/-a//" -e "s/-json//" <<<"$@")
+
 VERBOSE=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
@@ -29,7 +23,8 @@ Connection: close
 
 
 usage() {
-    echo -e "usage: $0 [-a|-v|-json] [openssl s_client args] <target:port>
+    echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [-j|--json] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
+    usage: $0 -h|--help
 
 $0 attempts to connect to a target site using all the ciphersuites it knowns.
 Julien Vehent [:ulfr] - https://github.com/jvehent/cipherscan
@@ -38,25 +33,25 @@ Port defaults to 443
 
 example: $ $0 www.google.com:443
 
-Use one of the options below as the first argument:
--v     increase verbosity
--a     test all known ciphers individually at the end
--json  output results in json format
+Use one of the options below:
+
+-a | --allciphers   Test all known ciphers individually at the end.
+-b | --benchmark    Activate benchmark mode.
+-h | --help         Shows this help text.
+-j | --json         Output results in JSON format.
+-o | --openssl      path/to/your/openssl binary you want to use.
+-v | --verbose      Increase verbosity.
 
 The rest of the arguments will be interpreted as openssl s_client argument.
 This enables checking smtp/imap/pop3/ftp/xmpp via -starttls
 
-example: $0 -starttls xmpp jabber.ccc.de:5222
-
-OpenSSL path can be changed in the OPENSSLBIN variable
-Benchmarking can be enabled in the DOBENCHMARK variable
+EXAMPLES: $0 -starttls xmpp jabber.ccc.de:5222
 "
-    exit 1
 }
 
 
 verbose() {
-    if [ $VERBOSE -eq 1 ];then
+    if [ $VERBOSE != 0 ];then
         echo $@
     fi
 }
@@ -70,7 +65,8 @@ test_cipher_on_target() {
     pfs=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
-        local tmp=$(mktemp)
+        local tmp=$(mktemp "/tmp/cipherscan.XXXXXXXX") # OS X mktemp requires this.
+        # echo "$sslcommand $tls_version"
         $sslcommand $tls_version 1>"$tmp" 2>/dev/null << EOF
 $REQUEST
 EOF
@@ -118,11 +114,11 @@ EOF
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
     local ciphersuite="$1"
-    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    local sslcommand='echo "quit\n" | $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite'
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
-        $sslcommand 2>/dev/null 1>/dev/null << EOF
+        ($sslcommand 2>/dev/null 1>/dev/null) << EOF
 $REQUEST
 EOF
         if [ $? -gt 0 ]; then
@@ -142,7 +138,7 @@ EOF
 get_cipher_pref() {
     [ "$OUTPUTFORMAT" == "terminal" ] && echo -n '.'
     local ciphersuite="$1"
-    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    local sslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     test_cipher_on_target "$sslcommand"
     local success=$?
@@ -203,19 +199,89 @@ display_results_in_json() {
     echo ']}'
 }
 
+# UNKNOWNOPTIONS=""
+while :
+do
+    case $1 in
+        -h | --help | -\?)
+            usage
+            exit 0      # This is not an error, User asked help. Don't do "exit 1"
+            ;;
+        -o | --openssl)
+            OPENSSLBIN=$2     # You might want to check if you really got FILE
+            shift 2
+            ;;
+        -a | --allciphers)
+            ALLCIPHERS=1
+            shift
+            ;;
+        -v | --verbose)
+            # Each instance of -v adds 1 to verbosity
+            VERBOSE=$((VERBOSE+1))
+            shift
+            ;;
+        -j | -json | --json | --JSON)
+            OUTPUTFORMAT="json"
+            shift
+            ;;
+        -b | --benchmark)
+            DOBENCHMARK=1
+            shift
+            ;;
+        --) # End of all options
+            shift
+            break
+            ;;
+        # -*)
+        #     UNKNOWNOPTIONS=$((UNKNOWNOPTIONS+$1))
+        #     # echo "WARN: Unknown option (ignored): $1" >&2
+        #     shift
+        #     ;;
+        *)  # no more options we understand.
+            break
+            ;;
+    esac
+done
 
-[[ -z $1 || "$1" == "-h" || "$1" == "--help" ]] && usage
-if [ ! -z $2 ]; then
-    if [ "$1" == "-v" ]; then
-        VERBOSE=1
-        echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
-        $OPENSSLBIN ciphers ALL 2>/dev/null
-    elif [ "$1" == "-a" ]; then
-        ALLCIPHERS=1
-    elif [ "$1" == "-json" ]; then
-        OUTPUTFORMAT="json"
-    fi
+if [ VERBOSE != 0 ] ; then
+    echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
+         $OPENSSLBIN ciphers ALL 2>/dev/null
 fi
+
+#[[ -z $1 || "$1" == "-h" || "$1" == "--help" ]] && usage
+# if [ ! -z $2 ]; then
+#     if [ "$1" == "-v" ]; then
+#         VERBOSE=1
+#         echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
+#         $OPENSSLBIN ciphers ALL 2>/dev/null
+#     elif [ "$1" == "-a" ]; then
+#         ALLCIPHERS=1
+#     elif [ "$1" == "-json" ]; then
+#         OUTPUTFORMAT="json"
+#     fi
+# fi
+
+# echo paramters left: $@
+
+TEMPTARGET=$(sed -e 's/^.* //'<<<"${@}")
+HOST=$(sed -e 's/:.*//'<<<"${TESTTARGET}")
+PORT=$(sed -e 's/.*://'<<<"${TESTTARGET}")
+
+# Default to https if no port given
+if [ "$HOST" = "$PORT" ]; then
+    PORT=443
+fi
+
+# echo host: $HOST
+# echo port: $PORT
+
+TARGET=$HOST:$PORT
+# echo target: $TARGET
+
+
+SCLIENTARGS=$(sed -e s,${TEMPTARGET},,<<<"${@}")
+# echo sclientargs: $SCLIENTARGS
+
 
 cipherspref=();
 results=()
@@ -235,7 +301,7 @@ if [ $ALLCIPHERS -gt 0 ]; then
     echo; echo "All accepted ciphersuites"
     for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
         r="fail"
-        osslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
+        osslcommand='echo "quit\n" | $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c'
         test_cipher_on_target "$osslcommand"
         if [ $? -eq 0 ]; then
             r="pass"
