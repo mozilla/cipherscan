@@ -65,17 +65,16 @@ test_cipher_on_target() {
     pfs=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
-        local tmp=$(mktemp "/tmp/cipherscan.XXXXXXXX") # OS X mktemp requires this.
         # echo "$sslcommand $tls_version"
-        $sslcommand $tls_version 1>"$tmp" 2>/dev/null << EOF
+        local tmp=$($sslcommand $tls_version 1>/dev/stdout 2>/dev/null << EOF
 $REQUEST
 EOF
-        current_cipher=$(grep "New, " $tmp|awk '{print $5}')
-        current_pfs=$(grep 'Server Temp Key' $tmp|awk '{print $4$5$6$7}')
-        current_protocol=$(grep -E "^\s+Protocol\s+:" $tmp|awk '{print $3}')
+)
+        current_cipher=$(grep "New, " <<<"$tmp"|awk '{print $5}')
+        current_pfs=$(grep 'Server Temp Key' <<<"$tmp"|awk '{print $4$5$6$7}')
+        current_protocol=$(grep -E "^\s+Protocol\s+:" <<<"$tmp"|awk '{print $3}')
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
             # connection failed, try again with next TLS version
-            rm "$tmp"
             continue
         fi
         # connection succeeded, add TLS version to positive results
@@ -87,7 +86,6 @@ EOF
         cipher=$current_cipher
         pfs=$current_pfs
         # grab the cipher and PFS key size
-        rm "$tmp"
     done
     # if cipher is empty, that means none of the TLS version worked with
     # the current cipher
