@@ -264,8 +264,8 @@ fi
 # echo paramters left: $@
 
 TEMPTARGET=$(sed -e 's/^.* //'<<<"${@}")
-HOST=$(sed -e 's/:.*//'<<<"${TESTTARGET}")
-PORT=$(sed -e 's/.*://'<<<"${TESTTARGET}")
+HOST=$(sed -e 's/:.*//'<<<"${TEMPTARGET}")
+PORT=$(sed -e 's/.*://'<<<"${TEMPTARGET}")
 
 # Default to https if no port given
 if [ "$HOST" = "$PORT" ]; then
