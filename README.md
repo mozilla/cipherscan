@@ -2,30 +2,37 @@ CipherScan
 ==========
 A very simple way to find out which SSL ciphersuites are supported by a target.
 
-Run: ./cipherscan www.google.com:443
-And watch.
+On Linux x86_64 run: ./cipherscan www.google.com:443
+On any other *nix or *tux run: ./cipherscan -o /path/to/openssl www.google.com:443
+and watch.
 
-The newer your version of openssl, the better results you'll get. Older versions
-of OpenSSL don't support TLS1.2 ciphers, elliptic curves, etc... Build Your Own!
+The newer your version of openssl, the better results you'll get. Versions
+of OpenSSL below 1.0.1 don't support TLS1.2 ciphers, elliptic curves, etc... Build your own or test what your system's OpenSSL supports.
+
+Cipherscan should work fine on Linux, Mac OS X, Solaris, Illumos, SmartOS, OpenIndiana if you specify a an openssl binary with -o.
+
 
 Options
 -------
-Enable benchmarking by setting DOBENCHMARK to 1 at the top of the script.
+Enable benchmarking by passing -b|--benchmark
 
-You can use one of the options below (only one. yes, I know...)
+You can the options below.
 
-Use '-v' to get more stuff to read.
-
-Use '-a' to force openssl to test every single cipher it know.
-
-Use '-json' to output the results in json format
+-a | --allciphers   Test all known ciphers individually at the end.
+-b | --benchmark    Activate benchmark mode.
+-h | --help         Shows this help text.
+-j | --json         Output results in JSON format.
+-o | --openssl      /path/to/the/openssl binary you want to use.
+-v | --verbose      Increase verbosity.
+	
 ```
-$ ./cipherscan -json www.google.com:443
+linux $ ./cipherscan -json www.google.com:443
 ```
 
 Example
 -------
 
+Testing plain SSL/TLS:
 ```
 $ ./cipherscan www.google.com:443
 ...................
@@ -48,6 +55,10 @@ prio  ciphersuite                  protocols                    pfs_keysize
 16    ECDHE-RSA-AES128-SHA256      SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
 17    AES128-SHA256                SSLv3,TLSv1,TLSv1.1,TLSv1.2
 18    AES128-SHA                   SSLv3,TLSv1,TLSv1.1,TLSv1.2
+```
+
+Testing STARTTLS:
+```
 $ ./cipherscan -starttls xmpp jabber.ccc.de:5222
 .........
 prio  ciphersuite           protocols    pfs_keysize
