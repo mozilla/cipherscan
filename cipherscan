@@ -10,7 +10,7 @@ BENCHMARKITER=30
 OPENSSLBIN="$(dirname $0)/openssl"
 TIMEOUT=10
 CIPHERSUITE="ALL:COMPLEMENTOFALL"
-
+DEBUG=0
 VERBOSE=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
@@ -37,6 +37,7 @@ Use one of the options below:
 
 -a | --allciphers   Test all known ciphers individually at the end.
 -b | --benchmark    Activate benchmark mode.
+-d | --debug        Output ALL the information.
 -h | --help         Shows this help text.
 -j | --json         Output results in JSON format.
 -o | --openssl      path/to/your/openssl binary you want to use.
@@ -51,11 +52,16 @@ EXAMPLES: $0 -starttls xmpp jabber.ccc.de:5222
 
 
 verbose() {
-    if [ $VERBOSE != 0 ];then
+    if [ $VERBOSE != 0 ]; then
         echo $@
     fi
 }
 
+debug(){
+    if [ $DEBUG == 1 ]; then
+        echo Debug: "$@"
+    fi
+}
 
 # Connect to a target host with the selected ciphersuite
 test_cipher_on_target() {
@@ -226,6 +232,10 @@ do
             DOBENCHMARK=1
             shift
             ;;
+        -d | --debug)
+            DEBUG=1
+            shift
+            ;;
         --) # End of all options
             shift
             break
@@ -270,15 +280,15 @@ if [ "$HOST" = "$PORT" ]; then
     PORT=443
 fi
 
-# echo host: $HOST
-# echo port: $PORT
+debug "host: $HOST"
+debug "Port: $PORT"
 
 TARGET=$HOST:$PORT
-# echo target: $TARGET
+debug "target: $TARGET"
 
 
 SCLIENTARGS=$(sed -e s,${TEMPTARGET},,<<<"${@}")
-# echo sclientargs: $SCLIENTARGS
+debug "sclientargs: $SCLIENTARGS"
 
 
 cipherspref=();
