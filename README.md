@@ -18,12 +18,12 @@ Enable benchmarking by passing -b|--benchmark
 
 You can the options below.
 
--a | --allciphers   Test all known ciphers individually at the end.
--b | --benchmark    Activate benchmark mode.
--h | --help         Shows this help text.
--j | --json         Output results in JSON format.
--o | --openssl      /path/to/the/openssl binary you want to use.
--v | --verbose      Increase verbosity.
+-a | --allciphers   Test all known ciphers individually at the end.  
+-b | --benchmark    Activate benchmark mode.  
+-h | --help         Shows this help text.  
+-j | --json         Output results in JSON format.  
+-o | --openssl      /path/to/the/openssl binary you want to use.  
+-v | --verbose      Increase verbosity.  
 	
 ```
 linux $ ./cipherscan -json www.google.com:443
