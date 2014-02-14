@@ -251,7 +251,7 @@ do
     esac
 done
 
-if [ VERBOSE != 0 ] ; then
+if [ $VERBOSE != 0 ] ; then
     echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
          $OPENSSLBIN ciphers ALL 2>/dev/null
 fi
