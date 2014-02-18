@@ -12,6 +12,7 @@ TIMEOUT=10
 CIPHERSUITE="ALL:COMPLEMENTOFALL"
 DEBUG=0
 VERBOSE=0
+DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
 REQUEST="GET / HTTP/1.1
@@ -23,7 +24,7 @@ Connection: close
 
 
 usage() {
-    echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [-j|--json] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
+    echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [-d|--delay seconds] [-D|--debug] [-j|--json] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
     usage: $0 -h|--help
 
 $0 attempts to connect to a target site using all the ciphersuites it knowns.
@@ -37,7 +38,8 @@ Use one of the options below:
 
 -a | --allciphers   Test all known ciphers individually at the end.
 -b | --benchmark    Activate benchmark mode.
--d | --debug        Output ALL the information.
+-d | --delay        Pause for n seconds between connections
+-D | --debug        Output ALL the information.
 -h | --help         Shows this help text.
 -j | --json         Output results in JSON format.
 -o | --openssl      path/to/your/openssl binary you want to use.
@@ -53,13 +55,13 @@ EXAMPLES: $0 -starttls xmpp jabber.ccc.de:5222
 
 verbose() {
     if [ $VERBOSE != 0 ]; then
-        echo $@
+        echo "$@" >&2
     fi
 }
 
 debug(){
     if [ $DEBUG == 1 ]; then
-        echo Debug: "$@"
+        echo Debug: "$@" >&2
     fi
 }
 
@@ -153,6 +155,7 @@ get_cipher_pref() {
         get_cipher_pref "!$pciph:$ciphersuite"
         return 0
     fi
+    sleep $DELAY
 }
 
 
@@ -232,9 +235,13 @@ do
             DOBENCHMARK=1
             shift
             ;;
-        -d | --debug)
+        -D | --debug)
             DEBUG=1
             shift
+            ;;
+        -d | --delay)
+            DELAY=$2
+            shift 2
             ;;
         --) # End of all options
             shift
@@ -315,5 +322,7 @@ if [ $ALLCIPHERS -gt 0 ]; then
             r="pass"
         fi
         echo "$c $r"|awk '{printf "%-35s %s\n",$1,$2}'
+        debug "Sleeping for $DELAY."
+        sleep $DELAY
     done
 fi
