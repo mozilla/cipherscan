@@ -11,22 +11,30 @@ of OpenSSL below 1.0.1 don't support TLS1.2 ciphers, elliptic curves, etc... Bui
 
 Cipherscan should work fine on Linux, Mac OS X, Solaris, Illumos, SmartOS, OpenIndiana if you specify a an openssl binary with -o.
 
+Build OpenSSL with ChaCha20-Poly1305 support (Optional)
+-------------------------------------------------------
+
+The OpenSSL binary in this repository is built for 64bit Linux. If you wish to build a version with the same features for your own platform, [the snapshot from the OpenSSL gitweb view](http://git.openssl.org/gitweb/?p=openssl.git;a=tree;h=161b23361778c155f9c174694b1db2506a2e0b52;hb=9a8646510b) and build it like this:
+
+```
+./config no-shared
+make
+```
+
+And get the binary from `app/openssl`. (`./config` will ask you to run `make depend` which will fail - for our purposes this step is not required)
 
 Options
 -------
-Enable benchmarking by passing -b|--benchmark
 
-You can the options below.
-
--a | --allciphers   Test all known ciphers individually at the end.  
--b | --benchmark    Activate benchmark mode.  
--h | --help         Shows this help text.  
--j | --json         Output results in JSON format.  
--o | --openssl      /path/to/the/openssl binary you want to use.  
--v | --verbose      Increase verbosity.  
-	
 ```
-linux $ ./cipherscan -json www.google.com:443
+-a | --allciphers   Test all known ciphers individually at the end.
+-b | --benchmark    Activate benchmark mode.
+-d | --delay        Pause for n seconds between connections
+-D | --debug        Output ALL the information.
+-h | --help         Shows this help text.
+-j | --json         Output results in JSON format.
+-o | --openssl      path/to/your/openssl binary you want to use.
+-v | --verbose      Increase verbosity.
 ```
 
 Example
@@ -34,7 +42,7 @@ Example
 
 Testing plain SSL/TLS:
 ```
-$ ./cipherscan www.google.com:443
+linux $ ./cipherscan www.google.com:443
 ...................
 prio  ciphersuite                  protocols                    pfs_keysize
 1     ECDHE-RSA-CHACHA20-POLY1305  SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
@@ -59,7 +67,7 @@ prio  ciphersuite                  protocols                    pfs_keysize
 
 Testing STARTTLS:
 ```
-$ ./cipherscan -starttls xmpp jabber.ccc.de:5222
+darwin $ ./cipherscan -o ./openssl-mine -starttls xmpp jabber.ccc.de:5222
 .........
 prio  ciphersuite           protocols    pfs_keysize
 1     DHE-RSA-AES256-SHA    SSLv3,TLSv1  DH,1024bits
