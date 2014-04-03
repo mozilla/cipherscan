@@ -64,6 +64,7 @@ test_cipher_on_target() {
     cipher=""
     protocols=""
     pfs=""
+    previous_cipher=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
         debug echo \"quit\\n\" \| $sslcommand $tls_version
@@ -74,7 +75,15 @@ test_cipher_on_target() {
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
             # connection failed, try again with next TLS version
             continue
+        else
+            verbose "connection successful; protocol: $current_protocol, cipher: $current_cipher, previous cipher: $previous_cipher"
         fi
+        # handling of TLSv1.2 only cipher suites
+        if [ ! -z "$previous_cipher" ] && [ "$previous_cipher" != "$current_cipher" ] && [ "$current_cipher" != "0000" ]; then
+            unset protocols
+        fi
+        previous_cipher=$current_cipher
+
         # connection succeeded, add TLS version to positive results
         if [ -z "$protocols" ]; then
             protocols=$current_protocol
