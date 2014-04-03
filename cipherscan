@@ -68,6 +68,7 @@ test_cipher_on_target() {
     cipher=""
     protocols=""
     pfs=""
+    previous_cipher=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
         local tmp=$(mktemp)
@@ -82,6 +83,21 @@ EOF
             rm "$tmp"
             continue
         fi
+        # handling of TLSv1.2 only cipher suites
+        if [ ! -z "$previous_cipher" ] && [ "$previous_cipher" != "$current_cipher" ]; then
+            protocols=""
+        fi
+        previous_cipher=$cipher
+        # SSLv2 ciphers use their own specific namespace (and RC4-MD5 is the
+        # only cipher that exists in both and we care for for)
+        if [ "$current_protocol" == "SSLv2" ] && [ "$current_cipher" != "RC4-MD5" ]; then
+            protocols=$current_protocol
+            cipher=$current_cipher
+            pfs=$current_pfs
+            rm "$tmp"
+            break 1
+        fi
+
         # connection succeeded, add TLS version to positive results
         if [ -z "$protocols" ]; then
             protocols=$current_protocol
