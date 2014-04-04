@@ -9,6 +9,8 @@ import sys
 from collections import defaultdict
 import os
 
+report_untrused=False
+
 cipherstats = defaultdict(int)
 pfsstats = defaultdict(int)
 protocolstats = defaultdict(int)
@@ -43,6 +45,7 @@ for r,d,flist in os.walk(path):
         TLS1_2 = False
         dualstack = False
         ECDSA = False
+        trusted = False
 
         """ process the file """
         f_abs = os.path.join(r,f)
@@ -57,10 +60,11 @@ for r,d,flist in os.walk(path):
             if len(results['ciphersuite']) < 1:
                 continue
 
-            total += 1
-
             """ loop over list of ciphers """
             for entry in results['ciphersuite']:
+
+                if 'True' in entry['trusted']:
+                    trusted = True
 
                 """ store the ciphers supported """
                 if 'AES-GCM' in entry['cipher']:
@@ -125,6 +129,12 @@ for r,d,flist in os.walk(path):
                     elif protocol == 'TLSv1.2':
                         TLS1_2 = True
         json_file.close()
+
+        """ don't store stats from unusued servers """
+        if report_untrused == False and trusted == False:
+            continue
+
+        total += 1
 
         """ done with this file, storing the stats """
         if DHE or ECDHE:
