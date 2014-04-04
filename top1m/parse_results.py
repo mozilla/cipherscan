@@ -15,6 +15,7 @@ protocolstats = defaultdict(int)
 handshakestats = defaultdict(int)
 keysize = defaultdict(int)
 sigalg = defaultdict(int)
+dsarsastack = 0
 total = 0
 for r,d,flist in os.walk(path):
 
@@ -40,6 +41,8 @@ for r,d,flist in os.walk(path):
         TLS1 = False
         TLS1_1 = False
         TLS1_2 = False
+        dualstack = False
+        ECDSA = False
 
         """ process the file """
         f_abs = os.path.join(r,f)
@@ -95,11 +98,16 @@ for r,d,flist in os.walk(path):
 
                 """ save the key size """
                 if 'ECDSA' in entry['cipher']:
+                    ECDSA = True
                     tempecckeystats[entry['pubkey'][0]] = 1
                 elif 'DSS' in entry['cipher']:
                     tempdsakeystats[entry['pubkey'][0]] = 1
+                elif 'AECDH' in entry['cipher'] or 'ADH' in entry['cipher']:
+                    """ skip """
                 else:
                     tempkeystats[entry['pubkey'][0]] = 1
+                    if ECDSA:
+                        dualstack = True
 
                 """ save key signatures size """
                 tempsigstats[entry['sigalg'][0]] = 1
@@ -132,6 +140,9 @@ for r,d,flist in os.walk(path):
             keysize['ECDSA ' + s] += 1
         for s in tempdsakeystats:
             keysize['DSA ' + s] += 1
+
+        if dualstack:
+            dsarsastack += 1
 
         for s in tempsigstats:
             sigalg[s] += 1
@@ -230,6 +241,8 @@ print("-------------------------+---------+--------")
 for stat in sorted(keysize):
     percent = round(keysize[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(keysize[stat]).ljust(10) + str(percent).ljust(9) + "\n")
+
+sys.stdout.write("RSA/ECDSA Dual Stack".ljust(25) + " " + str(dsarsastack).ljust(10) + str(round(dsarsastack/total * 100, 4)) + "\n")
 
 print("\nSupported Protocols       Count     Percent")
 print("-------------------------+---------+-------")
