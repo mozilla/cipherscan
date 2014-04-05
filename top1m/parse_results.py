@@ -63,8 +63,11 @@ for r,d,flist in os.walk(path):
             """ loop over list of ciphers """
             for entry in results['ciphersuite']:
 
-                if 'True' in entry['trusted']:
-                    trusted = True
+                # some servers return different certificates with different
+                # ciphers, also we may become redirected to other server with
+                # different config (because over-reactive IPS)
+                if 'False' in entry['trusted'] and report_untrused == False:
+                    continue
 
                 """ store the ciphers supported """
                 if 'AES-GCM' in entry['cipher']:
@@ -112,6 +115,9 @@ for r,d,flist in os.walk(path):
                     tempkeystats[entry['pubkey'][0]] = 1
                     if ECDSA:
                         dualstack = True
+
+                if 'True' in entry['trusted'] and not 'ADH' in entry['cipher'] and not 'AECDH' in entry['cipher']:
+                    trusted = True
 
                 """ save key signatures size """
                 tempsigstats[entry['sigalg'][0]] = 1
@@ -216,6 +222,10 @@ for r,d,flist in os.walk(path):
     #    break
 
 print("SSL/TLS survey of %i websites from Alexa's top 1 million" % total)
+if report_untrused == False:
+    print("Stats only from connections that did provide valid certificates")
+    print("(or anonymous DH from servers that do also have valid certificate installed)\n")
+
 """ Display stats """
 print("\nSupported Ciphers         Count     Percent")
 print("-------------------------+---------+-------")
