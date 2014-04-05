@@ -8,19 +8,12 @@
 DOBENCHMARK=0
 BENCHMARKITER=30
 OPENSSLBIN="$(dirname $0)/openssl"
-TIMEOUT=10
 CIPHERSUITE="ALL:COMPLEMENTOFALL"
 DEBUG=0
 VERBOSE=0
 DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
-REQUEST="GET / HTTP/1.1
-Host: $TARGET
-Connection: close
-
-
-"
 
 
 usage() {
@@ -73,11 +66,8 @@ test_cipher_on_target() {
     pfs=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
-        # echo "$sslcommand $tls_version"
-        local tmp=$($sslcommand $tls_version 1>/dev/stdout 2>/dev/null << EOF
-$REQUEST
-EOF
-)
+        debug echo \"quit\\n\" \| $sslcommand $tls_version
+        local tmp=$(echo "quit\n" | $sslcommand $tls_version 1>/dev/stdout 2>/dev/null)
         current_cipher=$(grep "New, " <<<"$tmp"|awk '{print $5}')
         current_pfs=$(grep 'Server Temp Key' <<<"$tmp"|awk '{print $4$5$6$7}')
         current_protocol=$(egrep "^\s+Protocol\s+:" <<<"$tmp"|awk '{print $3}')
@@ -120,13 +110,12 @@ EOF
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
     local ciphersuite="$1"
-    local sslcommand='echo "quit\n" | $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite'
+    local sslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
-        ($sslcommand 2>/dev/null 1>/dev/null) << EOF
-$REQUEST
-EOF
+        debug Connection $i
+        (echo "quit\n" | $sslcommand 2>/dev/null 1>/dev/null)
         if [ $? -gt 0 ]; then
             break
         fi
@@ -142,7 +131,7 @@ EOF
 # Connect to the target and retrieve the chosen cipher
 # recursively until the connection fails
 get_cipher_pref() {
-    [ "$OUTPUTFORMAT" == "terminal" ] && echo -n '.'
+    [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
     local ciphersuite="$1"
     local sslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
@@ -263,19 +252,6 @@ if [ $VERBOSE != 0 ] ; then
          $OPENSSLBIN ciphers ALL 2>/dev/null
 fi
 
-#[[ -z $1 || "$1" == "-h" || "$1" == "--help" ]] && usage
-# if [ ! -z $2 ]; then
-#     if [ "$1" == "-v" ]; then
-#         VERBOSE=1
-#         echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
-#         $OPENSSLBIN ciphers ALL 2>/dev/null
-#     elif [ "$1" == "-a" ]; then
-#         ALLCIPHERS=1
-#     elif [ "$1" == "-json" ]; then
-#         OUTPUTFORMAT="json"
-#     fi
-# fi
-
 # echo paramters left: $@
 
 TEMPTARGET=$(sed -e 's/^.* //'<<<"${@}")
@@ -316,7 +292,7 @@ if [ $ALLCIPHERS -gt 0 ]; then
     echo; echo "All accepted ciphersuites"
     for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
         r="fail"
-        osslcommand='echo "quit\n" | $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c'
+        osslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
         test_cipher_on_target "$osslcommand"
         if [ $? -eq 0 ]; then
             r="pass"
