@@ -76,6 +76,10 @@ test_cipher_on_target() {
         if [ -z $current_pubkey ]; then
             current_pubkey=0
         fi
+        current_sigalg=$(openssl x509 -noout -text 2>/dev/null <<<"$tmp"|grep Signature\ Algorithm | head -n 1 | awk '{print $3}') || current_sigalg="None"
+        if [ -z $current_sigalg ]; then
+            current_sigalg=None
+        fi
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
             # connection failed, try again with next TLS version
             continue
@@ -97,6 +101,7 @@ test_cipher_on_target() {
         cipher=$current_cipher
         pfs=$current_pfs
         pubkey=$current_pubkey
+        sigalg=$current_sigalg
         # grab the cipher and PFS key size
     done
     # if cipher is empty, that means none of the TLS version worked with
@@ -108,13 +113,13 @@ test_cipher_on_target() {
 
     # if cipher contains NONE, the cipher wasn't accepted
     elif [ "$cipher" == '(NONE)  ' ]; then
-        result="$cipher $protocols $pubkey $pfs"
+        result="$cipher $protocols $pubkey $sigalg $pfs"
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
 
     # the connection succeeded
     else
-        result="$cipher $protocols $pubkey $pfs"
+        result="$cipher $protocols $pubkey $sigalg $pfs"
         verbose "handshake succeeded, server returned ciphersuite '$result'"
         return 0
     fi
@@ -178,9 +183,9 @@ display_results_in_terminal() {
     done
 
     if [ $DOBENCHMARK -eq 1 ]; then
-        header="prio ciphersuite protocols pubkey_size pfs_keysize avg_handshake_microsec"
+        header="prio ciphersuite protocols pubkey_size signature_algoritm pfs_keysize avg_handshake_microsec"
     else
-        header="prio ciphersuite protocols pubkey_size pfs_keysize"
+        header="prio ciphersuite protocols pubkey_size signature_algorithm pfs_keysize"
     fi
     ctr=0
     for result in "${results[@]}"; do
@@ -202,7 +207,8 @@ display_results_in_json() {
         echo -n "{\"cipher\":\"$(echo $cipher|awk '{print $1}')\","
         echo -n "\"protocols\":[\"$(echo $cipher|awk '{print $2}'|sed 's/,/","/g')\"],"
         echo -n "\"pubkey\":[\"$(echo $cipher|awk '{print $3}'|sed 's/,/","/g')\"],"
-        pfs=$(echo $cipher|awk '{print $4}')
+        echo -n "\"sigalg\":[\"$(echo $cipher|awk '{print $4}'|sed 's/,/","/g')\"],"
+        pfs=$(echo $cipher|awk '{print $5}')
         [ "$pfs" == "" ] && pfs="None"
         echo -n "\"pfs\":\"$pfs\"}"
         ctr=$((ctr+1))
