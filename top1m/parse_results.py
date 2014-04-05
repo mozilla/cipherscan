@@ -9,10 +9,15 @@ import sys
 from collections import defaultdict
 import os
 
+report_untrused=False
+
 cipherstats = defaultdict(int)
 pfsstats = defaultdict(int)
 protocolstats = defaultdict(int)
 handshakestats = defaultdict(int)
+keysize = defaultdict(int)
+sigalg = defaultdict(int)
+dsarsastack = 0
 total = 0
 for r,d,flist in os.walk(path):
 
@@ -20,6 +25,10 @@ for r,d,flist in os.walk(path):
 
         """ initialize variables for stats of the current site """
         temppfsstats = {}
+        tempkeystats = {}
+        tempecckeystats = {}
+        tempdsakeystats = {}
+        tempsigstats = {}
         ciphertypes = 0
         AESGCM = False
         AES = False
@@ -34,6 +43,9 @@ for r,d,flist in os.walk(path):
         TLS1 = False
         TLS1_1 = False
         TLS1_2 = False
+        dualstack = False
+        ECDSA = False
+        trusted = False
 
         """ process the file """
         f_abs = os.path.join(r,f)
@@ -52,6 +64,12 @@ for r,d,flist in os.walk(path):
 
             """ loop over list of ciphers """
             for entry in results['ciphersuite']:
+
+                # some servers return different certificates with different
+                # ciphers, also we may become redirected to other server with
+                # different config (because over-reactive IPS)
+                if 'False' in entry['trusted'] and report_untrused == False:
+                    continue;
 
                 """ store the ciphers supported """
                 if 'AES-GCM' in entry['cipher']:
@@ -87,6 +105,25 @@ for r,d,flist in os.walk(path):
                     DHE = True
                     temppfsstats[entry['pfs']] = 1
 
+                """ save the key size """
+                if 'ECDSA' in entry['cipher']:
+                    ECDSA = True
+                    tempecckeystats[entry['pubkey'][0]] = 1
+                elif 'DSS' in entry['cipher']:
+                    tempdsakeystats[entry['pubkey'][0]] = 1
+                elif 'AECDH' in entry['cipher'] or 'ADH' in entry['cipher']:
+                    """ skip """
+                else:
+                    tempkeystats[entry['pubkey'][0]] = 1
+                    if ECDSA:
+                        dualstack = True
+
+                if 'True' in entry['trusted'] and not 'ADH' in entry['cipher'] and not 'AECDH' in entry['cipher']:
+                    trusted = True
+
+                """ save key signatures size """
+                tempsigstats[entry['sigalg'][0]] = 1
+
                 """ store the versions of TLS supported """
                 for protocol in entry['protocols']:
                     if protocol == 'SSLv2':
@@ -101,6 +138,10 @@ for r,d,flist in os.walk(path):
                         TLS1_2 = True
         json_file.close()
 
+        """ don't store stats from unusued servers """
+        if report_untrused == False and trusted == False:
+            continue
+
         """ done with this file, storing the stats """
         if DHE or ECDHE:
             pfsstats['Support PFS'] += 1
@@ -108,6 +149,19 @@ for r,d,flist in os.walk(path):
                 pfsstats['Prefer PFS'] += 1
             for s in temppfsstats:
                 pfsstats[s] += 1
+
+        for s in tempkeystats:
+            keysize['RSA ' + s] += 1
+        for s in tempecckeystats:
+            keysize['ECDSA ' + s] += 1
+        for s in tempdsakeystats:
+            keysize['DSA ' + s] += 1
+
+        if dualstack:
+            dsarsastack += 1
+
+        for s in tempsigstats:
+            sigalg[s] += 1
 
         """ store cipher stats """
         if AESGCM:
@@ -168,6 +222,10 @@ for r,d,flist in os.walk(path):
     #    break
 
 print("SSL/TLS survey of %i websites from Alexa's top 1 million" % total)
+if report_untrused == False:
+    print("Stats only from connections that did provide valid certificates")
+    print("(or anonymous DH from servers that do also have valid certificate installed)\n")
+
 """ Display stats """
 print("\nSupported Ciphers         Count     Percent")
 print("-------------------------+---------+-------")
@@ -191,6 +249,20 @@ for stat in sorted(pfsstats):
     elif "DH," in stat:
         pfspercent = round(pfsstats[stat] / handshakestats['DHE'] * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(pfsstats[stat]).ljust(10) + str(percent).ljust(9) + str(pfspercent) + "\n")
+
+print("\nCertificate sig alg     Count     Percent ")
+print("-------------------------+---------+--------")
+for stat in sorted(sigalg):
+    percent = round(sigalg[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(sigalg[stat]).ljust(10) + str(percent).ljust(9) + "\n")
+
+print("\nCertificate key size    Count     Percent ")
+print("-------------------------+---------+--------")
+for stat in sorted(keysize):
+    percent = round(keysize[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(keysize[stat]).ljust(10) + str(percent).ljust(9) + "\n")
+
+sys.stdout.write("RSA/ECDSA Dual Stack".ljust(25) + " " + str(dsarsastack).ljust(10) + str(round(dsarsastack/total * 100, 4)) + "\n")
 
 print("\nSupported Protocols       Count     Percent")
 print("-------------------------+---------+-------")

@@ -8,6 +8,10 @@
 DOBENCHMARK=0
 BENCHMARKITER=30
 OPENSSLBIN="$(dirname $0)/openssl"
+CACERTS=${CACERTS:-/etc/pki/tls/certs/ca-bundle.crt}
+if [ ! -e "$CACERTS" ]; then
+    echo "Warning: CA Certificates not found at $CACERTS, export CACERTS variable with location of your trust anchors" 1>&2
+fi
 CIPHERSUITE="ALL:COMPLEMENTOFALL"
 DEBUG=0
 VERBOSE=0
@@ -64,6 +68,7 @@ test_cipher_on_target() {
     cipher=""
     protocols=""
     pfs=""
+    previous_cipher=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
         debug echo \"quit\\n\" \| $sslcommand $tls_version
@@ -71,10 +76,32 @@ test_cipher_on_target() {
         current_cipher=$(grep "New, " <<<"$tmp"|awk '{print $5}')
         current_pfs=$(grep 'Server Temp Key' <<<"$tmp"|awk '{print $4$5$6$7}')
         current_protocol=$(egrep "^\s+Protocol\s+:" <<<"$tmp"|awk '{print $3}')
+        current_pubkey=$(grep 'Server public key is ' <<<"$tmp"|awk '{print $5}')
+        if [ -z $current_pubkey ]; then
+            current_pubkey=0
+        fi
+        current_sigalg=$(openssl x509 -noout -text 2>/dev/null <<<"$tmp"|grep Signature\ Algorithm | head -n 1 | awk '{print $3}') || current_sigalg="None"
+        grep 'Verify return code: 0 ' <<<"$tmp" >/dev/null
+        if [ $? -eq 0 ]; then
+            current_trusted="True"
+        else
+            current_trusted="False"
+        fi
+        if [ -z $current_sigalg ]; then
+            current_sigalg=None
+        fi
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
             # connection failed, try again with next TLS version
             continue
+        else
+            verbose "connection successful; protocol: $current_protocol, cipher: $current_cipher, previous cipher: $previous_cipher"
         fi
+        # handling of TLSv1.2 only cipher suites
+        if [ ! -z "$previous_cipher" ] && [ "$previous_cipher" != "$current_cipher" ] && [ "$current_cipher" != "0000" ]; then
+            unset protocols
+        fi
+        previous_cipher=$current_cipher
+
         # connection succeeded, add TLS version to positive results
         if [ -z "$protocols" ]; then
             protocols=$current_protocol
@@ -83,6 +110,9 @@ test_cipher_on_target() {
         fi
         cipher=$current_cipher
         pfs=$current_pfs
+        pubkey=$current_pubkey
+        sigalg=$current_sigalg
+        trusted=$current_trusted
         # grab the cipher and PFS key size
     done
     # if cipher is empty, that means none of the TLS version worked with
@@ -94,13 +124,13 @@ test_cipher_on_target() {
 
     # if cipher contains NONE, the cipher wasn't accepted
     elif [ "$cipher" == '(NONE)  ' ]; then
-        result="$cipher $protocols $pfs"
+        result="$cipher $protocols $pubkey $sigalg $trusted $pfs"
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
 
     # the connection succeeded
     else
-        result="$cipher $protocols $pfs"
+        result="$cipher $protocols $pubkey $sigalg $trusted $pfs"
         verbose "handshake succeeded, server returned ciphersuite '$result'"
         return 0
     fi
@@ -133,7 +163,11 @@ bench_cipher() {
 get_cipher_pref() {
     [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
     local ciphersuite="$1"
-    local sslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    if [ -e $CACERTS ]; then
+        local sslcommand="$OPENSSLBIN s_client -CAfile $CACERTS $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    else
+        local sslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    fi
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     test_cipher_on_target "$sslcommand"
     local success=$?
@@ -164,9 +198,9 @@ display_results_in_terminal() {
     done
 
     if [ $DOBENCHMARK -eq 1 ]; then
-        header="prio ciphersuite protocols pfs_keysize avg_handshake_microsec"
+        header="prio ciphersuite protocols pubkey_size signature_algoritm trusted pfs_keysize avg_handshake_microsec"
     else
-        header="prio ciphersuite protocols pfs_keysize"
+        header="prio ciphersuite protocols pubkey_size signature_algorithm trusted pfs_keysize"
     fi
     ctr=0
     for result in "${results[@]}"; do
@@ -187,7 +221,10 @@ display_results_in_json() {
         [ $ctr -gt 0 ] && echo -n ','
         echo -n "{\"cipher\":\"$(echo $cipher|awk '{print $1}')\","
         echo -n "\"protocols\":[\"$(echo $cipher|awk '{print $2}'|sed 's/,/","/g')\"],"
-        pfs=$(echo $cipher|awk '{print $3}')
+        echo -n "\"pubkey\":[\"$(echo $cipher|awk '{print $3}'|sed 's/,/","/g')\"],"
+        echo -n "\"sigalg\":[\"$(echo $cipher|awk '{print $4}'|sed 's/,/","/g')\"],"
+        echo -n "\"trusted\":\"$(echo $cipher|awk '{print $5}'|sed 's/,/","/g')\","
+        pfs=$(echo $cipher|awk '{print $6}')
         [ "$pfs" == "" ] && pfs="None"
         echo -n "\"pfs\":\"$pfs\"}"
         ctr=$((ctr+1))
