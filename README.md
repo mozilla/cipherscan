@@ -44,38 +44,38 @@ Testing plain SSL/TLS:
 ```
 linux $ ./cipherscan www.google.com:443
 ...................
-prio  ciphersuite                  protocols                    pfs_keysize
-1     ECDHE-RSA-CHACHA20-POLY1305  TLSv1.2                      ECDH,P-256,256bits
-2     ECDHE-RSA-AES128-GCM-SHA256  TLSv1.2                      ECDH,P-256,256bits
-3     ECDHE-RSA-AES128-SHA         TLSv1.2                      ECDH,P-256,256bits
-4     ECDHE-RSA-RC4-SHA            SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
-5     AES128-GCM-SHA256            TLSv1.2
-6     AES128-SHA256                TLSv1.2
-7     AES128-SHA                   TLSv1.2
-8     RC4-SHA                      SSLv3,TLSv1,TLSv1.1,TLSv1.2
-9     RC4-MD5                      SSLv3,TLSv1,TLSv1.1,TLSv1.2
-10    ECDHE-RSA-AES256-GCM-SHA384  TLSv1.2                      ECDH,P-256,256bits
-11    ECDHE-RSA-AES256-SHA384      TLSv1.2                      ECDH,P-256,256bits
-12    ECDHE-RSA-AES256-SHA         SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
-13    AES256-GCM-SHA384            TLSv1.2
-14    AES256-SHA256                TLSv1.2
-15    AES256-SHA                   SSLv3,TLSv1,TLSv1.1,TLSv1.2
-16    ECDHE-RSA-DES-CBC3-SHA       SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
-17    DES-CBC3-SHA                 SSLv3,TLSv1,TLSv1.1,TLSv1.2
-18    ECDHE-RSA-AES128-SHA256      TLSv1.2                      ECDH,P-256,256bits
+prio  ciphersuite                  protocols                    pubkey_size  signature_algorithm    trusted  pfs_keysize
+1     ECDHE-RSA-CHACHA20-POLY1305  TLSv1.2                      2048         sha1WithRSAEncryption  True     ECDH,P-256,256bits
+2     ECDHE-RSA-AES128-GCM-SHA256  TLSv1.2                      2048         sha1WithRSAEncryption  True     ECDH,P-256,256bits
+3     ECDHE-RSA-AES128-SHA         TLSv1.1,TLSv1.2              2048         sha1WithRSAEncryption  True     ECDH,P-256,256bits
+4     ECDHE-RSA-RC4-SHA            SSLv3,TLSv1,TLSv1.1,TLSv1.2  2048         sha1WithRSAEncryption  True     ECDH,P-256,256bits
+5     AES128-GCM-SHA256            TLSv1.2                      2048         sha1WithRSAEncryption  True
+6     AES128-SHA256                TLSv1.2                      2048         sha1WithRSAEncryption  True
+7     AES128-SHA                   TLSv1.1,TLSv1.2              2048         sha1WithRSAEncryption  True
+8     RC4-SHA                      SSLv3,TLSv1,TLSv1.1,TLSv1.2  2048         sha1WithRSAEncryption  True
+9     RC4-MD5                      SSLv3,TLSv1,TLSv1.1,TLSv1.2  2048         sha1WithRSAEncryption  True
+10    ECDHE-RSA-AES256-GCM-SHA384  TLSv1.2                      2048         sha1WithRSAEncryption  True     ECDH,P-256,256bits
+11    ECDHE-RSA-AES256-SHA384      TLSv1.2                      2048         sha1WithRSAEncryption  True     ECDH,P-256,256bits
+12    ECDHE-RSA-AES256-SHA         SSLv3,TLSv1,TLSv1.1,TLSv1.2  2048         sha1WithRSAEncryption  True     ECDH,P-256,256bits
+13    AES256-GCM-SHA384            TLSv1.2                      2048         sha1WithRSAEncryption  True
+14    AES256-SHA256                TLSv1.2                      2048         sha1WithRSAEncryption  True
+15    AES256-SHA                   SSLv3,TLSv1,TLSv1.1,TLSv1.2  2048         sha1WithRSAEncryption  True
+16    ECDHE-RSA-DES-CBC3-SHA       SSLv3,TLSv1,TLSv1.1,TLSv1.2  2048         sha1WithRSAEncryption  True     ECDH,P-256,256bits
+17    DES-CBC3-SHA                 SSLv3,TLSv1,TLSv1.1,TLSv1.2  2048         sha1WithRSAEncryption  True
+18    ECDHE-RSA-AES128-SHA256      TLSv1.2                      2048         sha1WithRSAEncryption  True     ECDH,P-256,256bits
 ```
 
 Testing STARTTLS:
 ```
 darwin $ ./cipherscan -o ./openssl-mine -starttls xmpp jabber.ccc.de:5222
 .........
-prio  ciphersuite           protocols    pfs_keysize
-1     DHE-RSA-AES256-SHA    SSLv3,TLSv1  DH,1024bits
-2     AES256-SHA            SSLv3,TLSv1
-3     EDH-RSA-DES-CBC3-SHA  SSLv3,TLSv1  DH,1024bits
-4     DES-CBC3-SHA          SSLv3,TLSv1
-5     DHE-RSA-AES128-SHA    SSLv3,TLSv1  DH,1024bits
-6     AES128-SHA            SSLv3,TLSv1
-7     RC4-SHA               SSLv3,TLSv1
-8     RC4-MD5               SSLv3,TLSv1
+prio  ciphersuite           protocols    pubkey_size  signature_algorithm    trusted  pfs_keysize
+1     DHE-RSA-AES256-SHA    SSLv3,TLSv1  2048         sha1WithRSAEncryption  False    DH,1024bits
+2     AES256-SHA            SSLv3,TLSv1  2048         sha1WithRSAEncryption  False
+3     EDH-RSA-DES-CBC3-SHA  SSLv3,TLSv1  2048         sha1WithRSAEncryption  False    DH,1024bits
+4     DES-CBC3-SHA          SSLv3,TLSv1  2048         sha1WithRSAEncryption  False
+5     DHE-RSA-AES128-SHA    SSLv3,TLSv1  2048         sha1WithRSAEncryption  False    DH,1024bits
+6     AES128-SHA            SSLv3,TLSv1  2048         sha1WithRSAEncryption  False
+7     RC4-SHA               SSLv3,TLSv1  2048         sha1WithRSAEncryption  False
+8     RC4-MD5               SSLv3,TLSv1  2048         sha1WithRSAEncryption  False
 ```
