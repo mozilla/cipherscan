@@ -32,6 +32,7 @@ for r,d,flist in os.walk(path):
         ciphertypes = 0
         AESGCM = False
         AES = False
+        CHACHA20 = False
         DES3 = False
         CAMELLIA = False
         RC4 = False
@@ -90,6 +91,10 @@ for r,d,flist in os.walk(path):
                     if not RC4:
                         ciphertypes += 1
                         RC4 = True
+                elif 'CHACHA20' in entry['cipher']:
+                    if not CHACHA20:
+                        ciphertypes += 1
+                        CHACHA20 = True
                 else:
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
@@ -175,6 +180,10 @@ for r,d,flist in os.walk(path):
         if (AES and ciphertypes == 1) or (AESGCM and ciphertypes == 1)\
             or (AES and AESGCM and ciphertypes == 2):
                 cipherstats['AES Only'] += 1
+        if CHACHA20:
+            cipherstats['CHACHA20'] += 1
+            if ciphertypes == 1:
+                cipherstats['CHACHA20 Only'] += 1
         if DES3:
             cipherstats['3DES'] += 1
             if ciphertypes == 1:
