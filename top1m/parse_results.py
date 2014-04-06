@@ -152,6 +152,7 @@ for r,d,flist in os.walk(path):
             pfsstats['Support PFS'] += 1
             if 'DHE-' in results['ciphersuite'][0]['cipher']:
                 pfsstats['Prefer PFS'] += 1
+                pfsstats['Prefer ' + results['ciphersuite'][0]['pfs']] += 1
             for s in temppfsstats:
                 pfsstats[s] += 1
 
