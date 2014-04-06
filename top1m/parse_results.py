@@ -70,7 +70,7 @@ for r,d,flist in os.walk(path):
                     continue
 
                 """ store the ciphers supported """
-                if 'AES-GCM' in entry['cipher']:
+                if 'AES128-GCM' in entry['cipher'] or 'AES256-GCM' in entry['cipher']:
                     if not AESGCM:
                         AESGCM = True
                         ciphertypes += 1
@@ -171,6 +171,9 @@ for r,d,flist in os.walk(path):
         if AES:
             cipherstats['AES'] += 1
             if ciphertypes == 1:
+                cipherstats['AES-CBC Only'] += 1
+        if (AES and ciphertypes == 1) or (AESGCM and ciphertypes == 1)\
+            or (AES and AESGCM and ciphertypes == 2):
                 cipherstats['AES Only'] += 1
         if DES3:
             cipherstats['3DES'] += 1
