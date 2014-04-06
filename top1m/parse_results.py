@@ -219,6 +219,10 @@ for r,d,flist in os.walk(path):
             protocolstats['TLS1'] += 1
             if not SSL2 and not SSL3 and not TLS1_1 and not TLS1_2:
                 protocolstats['TLS1 Only'] += 1
+        if not SSL2 and (SSL3 or TLS1) and not TLS1_1 and not TLS1_2:
+            protocolstats['SSL3 or TLS1 Only'] += 1
+        if not SSL2 and not SSL3 and not TLS1:
+            protocolstats['TLS1.1 or up Only'] += 1
         if TLS1_1:
             protocolstats['TLS1.1'] += 1
             if not SSL2 and not SSL3 and not TLS1 and not TLS1_2:
