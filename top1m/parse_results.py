@@ -197,6 +197,12 @@ for r,d,flist in os.walk(path):
             cipherstats['RC4'] += 1
             if ciphertypes == 1:
                 cipherstats['RC4 Only'] += 1
+            if 'RC4' in results['ciphersuite'][0]['cipher']:
+                if 'TLSv1.1' in results['ciphersuite'][0]['protocols'] or\
+                   'TLSv1.2' in results['ciphersuite'][0]['protocols']:
+                        cipherstats['RC4 forced in TLS1.1+'] += 1
+                cipherstats['RC4 Preferred'] += 1
+
 
         """ store handshake stats """
         if ECDHE:
