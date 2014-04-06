@@ -185,6 +185,10 @@ get_cipher_pref() {
 display_results_in_terminal() {
     # Display the results
     ctr=1
+    local pubkey
+    local sigalg
+    local trusted
+    local different=False
     for cipher in "${cipherspref[@]}"; do
         pciph=$(echo $cipher|awk '{print $1}')
         if [ $DOBENCHMARK -eq 1 ]; then
@@ -193,14 +197,37 @@ display_results_in_terminal() {
         else
             r="$ctr $cipher"
         fi
+        if [ $ctr -eq 1 ]; then
+            pubkey=$(awk '{print $3}' <<<$cipher)
+            sigalg=$(awk '{print $4}' <<<$cipher)
+            trusted=$(awk '{print $5}' <<<$cipher)
+        else
+            if [ "$pubkey" != "$(awk '{print $3}' <<<$cipher)" ]; then
+                different=True
+            fi
+            if [ "$sigalg" != "$(awk '{print $4}' <<<$cipher)" ]; then
+                different=True
+            fi
+            if [ "$trusted" != "$(awk '{print $5}' <<<$cipher)" ]; then
+                different=True
+            fi
+        fi
         results=("${results[@]}" "$r")
         ctr=$((ctr+1))
     done
 
     if [ $DOBENCHMARK -eq 1 ]; then
-        header="prio ciphersuite protocols pubkey_size signature_algoritm trusted pfs_keysize avg_handshake_microsec"
+        if [ $different == "True" ]; then
+            header="prio ciphersuite protocols pubkey_size signature_algoritm trusted pfs_keysize avg_handshake_microsec"
+        else
+            header="prio ciphersuite protocols pfs_keysize avg_handshake_microsec"
+        fi
     else
-        header="prio ciphersuite protocols pubkey_size signature_algorithm trusted pfs_keysize"
+        if [ $different == "True" ]; then
+            header="prio ciphersuite protocols pubkey_size signature_algorithm trusted pfs_keysize"
+        else
+            header="prio ciphersuite protocols pfs_keysize"
+        fi
     fi
     ctr=0
     for result in "${results[@]}"; do
@@ -208,8 +235,20 @@ display_results_in_terminal() {
             echo $header
             ctr=$((ctr+1))
         fi
-        echo $result|grep -v '(NONE)'
+        if [ $different == "True" ]; then
+            echo $result|grep -v '(NONE)'
+        else
+            echo $result|grep -v '(NONE)'|awk '{print $1 " " $2 " " $3 " " $7}'
+        fi
     done|column -t
+    echo
+    if [ $different != "True" ]; then
+        if [ "$trusted" == "True" ]; then
+            echo "Certificate: trusted, $pubkey bit, $sigalg signature"
+        else
+            echo "Certificate: UNTRUSTED, $pubkey bit, $sigalg signature"
+        fi
+    fi
 }
 
 
