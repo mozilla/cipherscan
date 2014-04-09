@@ -15,6 +15,8 @@ DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
 
+# Error codes
+E_MISSING_OPENSSL_PARAMETERS=250 # When we have valid cipherscan options, but are missing any parameters to pass to OpenSSL.
 
 usage() {
     echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [-d|--delay seconds] [-D|--debug] [-j|--json] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
@@ -253,6 +255,13 @@ if [ $VERBOSE != 0 ] ; then
 fi
 
 # echo paramters left: $@
+# Testing for existence of OpenSSL parameters
+if [ -z "$1" ]; then
+
+ usage
+ exit $E_MISSING_OPENSSL_PARAMETERS
+fi
+
 
 TEMPTARGET=$(sed -e 's/^.* //'<<<"${@}")
 HOST=$(sed -e 's/:.*//'<<<"${TEMPTARGET}")
