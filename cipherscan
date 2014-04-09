@@ -17,6 +17,25 @@ OUTPUTFORMAT="terminal"
 
 # Error codes
 E_MISSING_OPENSSL_PARAMETERS=250 # When we have valid cipherscan options, but are missing any parameters to pass to OpenSSL.
+ERROR_MESSAGE[$E_MISSING_OPENSSL_PARAMETERS]="Missing any OpenSSL parameters"
+
+E_OPENSSL_NOT_FOUND=249 # Cound't find the specified OpenSSL binary.
+ERROR_MESSAGE[$E_OPENSSL_NOT_FOUND]="openssl not found"
+
+E_OPENSSL_NOT_EXECUTABLE=248 # Specified OpenSSL has been found but is not executable for user.
+ERROR_MESSAGE[$E_OPENSSL_NOT_EXECUTABLE]="openssl not executable"
+
+function error_exit {
+    local ERRORCODE=$1
+    echo verbose=$VERBOSE
+    echo debug=$DEBUG
+    if [ $VERBOSE -gt 0 ] || [ $DEBUG -gt 0 ]; then
+        if [ -n $ERROR_MESSAGE[$ERRORCODE] ]; then
+            echo "${ERROR_MESSAGE[$ERRORCODE]}" >&2
+        fi
+    fi
+    exit $ERRORCODE
+}
 
 usage() {
     echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [-d|--delay seconds] [-D|--debug] [-j|--json] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
@@ -249,6 +268,21 @@ do
     esac
 done
 
+# Check OpenSSL
+if [ ! -x "$OPENSSLBIN" ]; then
+    # openssl does not exist || is not executable
+    if [ -a "$OPENSSLBIN" ]; then
+        # openssl does exist, but is not executable
+        error_exit $E_OPENSSL_NOT_EXECUTABLE
+    else
+        # openssl does not exist
+        error_exit $E_OPENSSL_NOT_FOUND
+    fi
+# else
+    # File exists and IS executable
+fi
+
+
 if [ $VERBOSE != 0 ] ; then
     echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
          $OPENSSLBIN ciphers ALL 2>/dev/null
@@ -259,7 +293,7 @@ fi
 if [ -z "$1" ]; then
 
  usage
- exit $E_MISSING_OPENSSL_PARAMETERS
+ error_exit $E_MISSING_OPENSSL_PARAMETERS
 fi
 
 
