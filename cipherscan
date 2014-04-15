@@ -16,13 +16,13 @@ ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
 
 # Error codes
-E_MISSING_OPENSSL_PARAMETERS=250 # When we have valid cipherscan options, but are missing any parameters to pass to OpenSSL.
+E_MISSING_OPENSSL_PARAMETERS=113 # When we have valid cipherscan options, but are missing any parameters to pass to OpenSSL.
 ERROR_MESSAGE[$E_MISSING_OPENSSL_PARAMETERS]="Missing any OpenSSL parameters"
 
-E_OPENSSL_NOT_FOUND=249 # Cound't find the specified OpenSSL binary.
+E_OPENSSL_NOT_FOUND=112 # Cound't find the specified OpenSSL binary.
 ERROR_MESSAGE[$E_OPENSSL_NOT_FOUND]="openssl not found"
 
-E_OPENSSL_NOT_EXECUTABLE=248 # Specified OpenSSL has been found but is not executable for user.
+E_OPENSSL_NOT_EXECUTABLE=111 # Specified OpenSSL has been found but is not executable for user.
 ERROR_MESSAGE[$E_OPENSSL_NOT_EXECUTABLE]="openssl not executable"
 
 function error_exit {
