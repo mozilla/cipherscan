@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 parallel=50
-max_bg=400
+max_bg=50
 [ ! -e "results" ] && mkdir results
 
 function wait_for_jobs() {
@@ -13,6 +13,20 @@ function wait_for_jobs() {
     done
 }
 
+function scan_host() {
+    tcping -u 10000000 $1 443;
+    if [ $? -gt 0 ];then
+        tcping -u 10000000 www.$1 443;
+        if [ $? -gt 0 ]; then
+            return;
+        else
+            ../cipherscan -json www.$1:443 > results/www.$t
+            return;
+        fi;
+    fi;
+    ../cipherscan -json $t:443 > results/$t
+}
+
 i=0
 count=$(wc -l top-1m.csv | awk '{print $1}')
 while [ $i -lt $count ]
@@ -20,16 +34,7 @@ do
     echo processings sites $i to $((i + parallel))
     for t in $(tail -$(($count - $i)) top-1m.csv | head -$parallel |cut -d ',' -f 2)
     do
-        (tcping -u 10000000 $t 443;
-         if [ $? -gt 0 ];then 
-             tcping -u 10000000 www.$t 443; 
-             if [ $? -gt 0 ]; then 
-                 continue; 
-             else 
-                 ../cipherscan -json www.$t:443 > results/www.$t
-                 continue;
-             fi;
-         fi;../cipherscan -json $t:443 > results/$t )&
+        (scan_host $t)&
     done
     i=$(( i + parallel))
     wait_for_jobs $max_bg
