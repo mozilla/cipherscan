@@ -14,17 +14,39 @@ function wait_for_jobs() {
 }
 
 function scan_host() {
-    tcping -u 10000000 $1 443;
-    if [ $? -gt 0 ];then
-        tcping -u 10000000 www.$1 443;
-        if [ $? -gt 0 ]; then
-            return;
-        else
-            ../cipherscan -json www.$1:443 > results/www.$t
-            return;
-        fi;
-    fi;
-    ../cipherscan -json $t:443 > results/$t
+    tcping -u 10000000 $2 443;
+    if [ $? -gt 0 ]; then
+        return
+    fi
+    ../cipherscan -json -servername $1 $2:443 > results/$1@$2
+}
+
+function scan_hostname() {
+    local host_ips=$(host $1 | awk '/has address/ {print $4}')
+    local www_ips=$(host www.$1 | awk '/has address/ {print $4}')
+    if [ ! -z "$host_ips" ] && [ ! -z "$www_ips" ]; then
+        # list of IPs that are in www but not in host
+        local diff=$(grep -Fv "$host_ips" <<< "$www_ips")
+        while read ip; do
+            scan_host $1 $ip
+        done <<< "$host_ips"
+        if [ ! -z "$diff" ]; then
+            while read ip; do
+                scan_host www.$1 $ip
+            done <<< "$diff"
+        fi
+    else
+        if [ ! -z "$host_ips" ]; then
+            while read ip; do
+                scan_host $1 $ip
+            done <<< "$host_ips"
+        fi
+        if [ ! -z "$www_ips" ]; then
+            while read ip; do
+                scan_host www.$1 $ip
+            done <<< "$www_ips"
+        fi
+    fi
 }
 
 i=0
@@ -34,7 +56,7 @@ do
     echo processings sites $i to $((i + parallel))
     for t in $(tail -$(($count - $i)) top-1m.csv | head -$parallel |cut -d ',' -f 2)
     do
-        (scan_host $t)&
+        (scan_hostname $t)&
     done
     i=$(( i + parallel))
     wait_for_jobs $max_bg
