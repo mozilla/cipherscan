@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
-parallel=50
+parallel=10
 max_bg=50
+absolute_max_bg=100
+max_load=50
+
+if [ $(ulimit -u) -lt $((10*absolute_max_bg)) ]; then
+    echo "max user processes too low, use ulimit -u to increase"
+    exit 1
+fi
 [ ! -e "results" ] && mkdir results
 
 function wait_for_jobs() {
     local no_jobs
     no_jobs=$(jobs | wc -l)
 
-    while [ $no_jobs -gt $1 ]; do
+    while [ $no_jobs -gt $1 ] || awk -v maxload=$max_load '{ if ($1 < maxload) exit 1 }' /proc/loadavg; do
+        if awk -v maxload=$max_load '{ if ($1 > maxload) exit 1 }' /proc/loadavg && [ $no_jobs -lt $absolute_max_bg ]; then
+            return
+        fi
         sleep 1
         no_jobs=$(jobs | wc -l)
     done
