@@ -54,7 +54,7 @@ count=$(wc -l top-1m.csv | awk '{print $1}')
 while [ $i -lt $count ]
 do
     echo processings sites $i to $((i + parallel))
-    for t in $(tail -$(($count - $i)) top-1m.csv | head -$parallel |cut -d ',' -f 2)
+    for t in $(tail -$(($count - $i)) top-1m.csv | head -$parallel |cut -d ',' -f 2|cut -d "/" -f 1)
     do
         (scan_hostname $t)&
     done
