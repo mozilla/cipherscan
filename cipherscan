@@ -18,6 +18,7 @@ VERBOSE=0
 DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
+TIMEOUT=10
 
 
 usage() {
@@ -140,7 +141,7 @@ test_cipher_on_target() {
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
     local ciphersuite="$1"
-    local sslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
@@ -164,9 +165,9 @@ get_cipher_pref() {
     [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
     local ciphersuite="$1"
     if [ -e $CACERTS ]; then
-        local sslcommand="$OPENSSLBIN s_client -CAfile $CACERTS $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -CAfile $CACERTS $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     else
-        local sslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     fi
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     test_cipher_on_target "$sslcommand"
@@ -368,7 +369,7 @@ if [ $ALLCIPHERS -gt 0 ]; then
     echo; echo "All accepted ciphersuites"
     for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
         r="fail"
-        osslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
+        osslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
         test_cipher_on_target "$osslcommand"
         if [ $? -eq 0 ]; then
             r="pass"
