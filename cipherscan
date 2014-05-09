@@ -72,8 +72,8 @@ test_cipher_on_target() {
     previous_cipher=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
-        debug echo \"quit\\n\" \| $sslcommand $tls_version
-        local tmp=$(echo "quit\n" | $sslcommand $tls_version 1>/dev/stdout 2>/dev/null)
+        debug echo \"Q\" \| $sslcommand $tls_version
+        local tmp=$(echo "Q" | $sslcommand $tls_version 1>/dev/stdout 2>/dev/null)
         current_cipher=$(grep "New, " <<<"$tmp"|awk '{print $5}')
         current_pfs=$(grep 'Server Temp Key' <<<"$tmp"|awk '{print $4$5$6$7}')
         current_protocol=$(egrep "^\s+Protocol\s+:" <<<"$tmp"|awk '{print $3}')
@@ -146,7 +146,7 @@ bench_cipher() {
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
         debug Connection $i
-        (echo "quit\n" | $sslcommand 2>/dev/null 1>/dev/null)
+        (echo "Q" | $sslcommand 2>/dev/null 1>/dev/null)
         if [ $? -gt 0 ]; then
             break
         fi
