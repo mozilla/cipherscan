@@ -18,6 +18,7 @@ handshakestats = defaultdict(int)
 keysize = defaultdict(int)
 sigalg = defaultdict(int)
 tickethint = defaultdict(int)
+ocspstaple = defaultdict(int)
 dsarsastack = 0
 total = 0
 for r,d,flist in os.walk(path):
@@ -49,6 +50,7 @@ for r,d,flist in os.walk(path):
         dualstack = False
         ECDSA = False
         trusted = False
+        ocsp_stapling = False
 
         """ process the file """
         f_abs = os.path.join(r,f)
@@ -132,6 +134,12 @@ for r,d,flist in os.walk(path):
                 """ save tls ticket hint """
                 tempticketstats[entry['ticket_hint']] = 1
 
+                """ check if OCSP stapling is supported """
+                if entry['ocsp_stapling'] == 'True':
+                    ocsp_stapling=True
+                else:
+                    ocsp_stapling=False
+
                 """ store the versions of TLS supported """
                 for protocol in entry['protocols']:
                     if protocol == 'SSLv2':
@@ -179,6 +187,11 @@ for r,d,flist in os.walk(path):
                 tickethint[s + " only"] += 1
         for s in tempticketstats:
             tickethint[s] += 1
+
+        if ocsp_stapling:
+            ocspstaple['Supported'] += 1
+        else:
+            ocspstaple['Unsupported'] += 1
 
         """ store cipher stats """
         if AESGCM:
@@ -303,6 +316,12 @@ for stat in sorted(keysize):
     sys.stdout.write(stat.ljust(25) + " " + str(keysize[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
 sys.stdout.write("RSA/ECDSA Dual Stack".ljust(25) + " " + str(dsarsastack).ljust(10) + str(round(dsarsastack/total * 100, 4)) + "\n")
+
+print("\nOCSP stapling             Count     Percent ")
+print("-------------------------+---------+--------")
+for stat in sorted(ocspstaple):
+    percent = round(ocspstaple[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(ocspstaple[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
 print("\nSupported Protocols       Count     Percent")
 print("-------------------------+---------+-------")
