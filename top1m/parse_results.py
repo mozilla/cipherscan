@@ -17,6 +17,7 @@ protocolstats = defaultdict(int)
 handshakestats = defaultdict(int)
 keysize = defaultdict(int)
 sigalg = defaultdict(int)
+tickethint = defaultdict(int)
 dsarsastack = 0
 total = 0
 for r,d,flist in os.walk(path):
@@ -29,6 +30,7 @@ for r,d,flist in os.walk(path):
         tempecckeystats = {}
         tempdsakeystats = {}
         tempsigstats = {}
+        tempticketstats = {}
         ciphertypes = 0
         AESGCM = False
         AES = False
@@ -127,6 +129,9 @@ for r,d,flist in os.walk(path):
                 """ save key signatures size """
                 tempsigstats[entry['sigalg'][0]] = 1
 
+                """ save tls ticket hint """
+                tempticketstats[entry['ticket_hint']] = 1
+
                 """ store the versions of TLS supported """
                 for protocol in entry['protocols']:
                     if protocol == 'SSLv2':
@@ -168,6 +173,12 @@ for r,d,flist in os.walk(path):
 
         for s in tempsigstats:
             sigalg[s] += 1
+
+        if len(tempticketstats) == 1:
+            for s in tempticketstats:
+                tickethint[s + " only"] += 1
+        for s in tempticketstats:
+            tickethint[s] += 1
 
         """ store cipher stats """
         if AESGCM:
@@ -272,6 +283,12 @@ for stat in sorted(pfsstats):
     elif "DH," in stat:
         pfspercent = round(pfsstats[stat] / handshakestats['DHE'] * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(pfsstats[stat]).ljust(10) + str(percent).ljust(9) + str(pfspercent) + "\n")
+
+print("\nTLS session ticket hint   Count     Percent ")
+print("-------------------------+---------+--------")
+for stat in sorted(tickethint):
+    percent = round(tickethint[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(tickethint[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
 print("\nCertificate sig alg     Count     Percent ")
 print("-------------------------+---------+--------")
