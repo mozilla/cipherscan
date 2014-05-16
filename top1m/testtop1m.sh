@@ -31,7 +31,21 @@ function scan_host() {
     ../cipherscan -json -servername $1 $2:443 > results/$1@$2
 }
 
+function scan_host_no_sni() {
+    tcping -u 10000000 $1 443;
+    if [ $? -gt 0 ]; then
+        return
+    fi
+    ../cipherscan -json $1:443 > results/$1
+}
+
 function scan_hostname() {
+    if [[ ! -z $(awk -F. '$1>=0 && $1<=255 && $2>=0 && $2<=255 &&
+        $3>=0 && $3<=255 && $4>=0 && $4<=255 && NF==4' <<<"$1") ]]; then
+        scan_host_no_sni $1
+        return
+    fi
+
     local host_ips=$(host $1 | awk '/has address/ {print $4}')
     local www_ips=$(host www.$1 | awk '/has address/ {print $4}')
     if [ ! -z "$host_ips" ] && [ ! -z "$www_ips" ]; then
