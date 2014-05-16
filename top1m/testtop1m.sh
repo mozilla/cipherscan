@@ -51,24 +51,24 @@ function scan_hostname() {
     if [ ! -z "$host_ips" ] && [ ! -z "$www_ips" ]; then
         # list of IPs that are in www but not in host
         local diff=$(grep -Fv "$host_ips" <<< "$www_ips")
-        while read ip; do
+        head -n 1 <<< "$host_ips" | while read ip; do
             scan_host $1 $ip
-        done <<< "$host_ips"
+        done
         if [ ! -z "$diff" ]; then
-            while read ip; do
+            head -n 1 <<<"$diff" | while read ip; do
                 scan_host www.$1 $ip
-            done <<< "$diff"
+            done
         fi
     else
         if [ ! -z "$host_ips" ]; then
-            while read ip; do
+            head -n 1 <<<"$host_ips" | while read ip; do
                 scan_host $1 $ip
-            done <<< "$host_ips"
+            done
         fi
         if [ ! -z "$www_ips" ]; then
-            while read ip; do
+            head -n 1 <<<"$www_ips" | while read ip; do
                 scan_host www.$1 $ip
-            done <<< "$www_ips"
+            done
         fi
     fi
 }
