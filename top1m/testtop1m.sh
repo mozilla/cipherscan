@@ -24,6 +24,10 @@ function wait_for_jobs() {
 }
 
 function scan_host() {
+    # do not scan the same host multiple times
+    if [ -e results/$1@$2 ]; then
+        return
+    fi
     tcping -u 10000000 $2 443;
     if [ $? -gt 0 ]; then
         return
@@ -32,6 +36,10 @@ function scan_host() {
 }
 
 function scan_host_no_sni() {
+    # do not scan the same host multiple times
+    if [ -e results/$1 ]; then
+        return
+    fi
     tcping -u 10000000 $1 443;
     if [ $? -gt 0 ]; then
         return
