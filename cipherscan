@@ -18,6 +18,7 @@ VERBOSE=0
 DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
+TIMEOUT=10
 
 
 usage() {
@@ -71,8 +72,8 @@ test_cipher_on_target() {
     previous_cipher=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
-        debug echo \"quit\\n\" \| $sslcommand $tls_version
-        local tmp=$(echo "quit\n" | $sslcommand $tls_version 1>/dev/stdout 2>/dev/null)
+        debug echo \"Q\" \| $sslcommand $tls_version
+        local tmp=$(echo "Q" | $sslcommand $tls_version 1>/dev/stdout 2>/dev/null)
         current_cipher=$(grep "New, " <<<"$tmp"|awk '{print $5}')
         current_pfs=$(grep 'Server Temp Key' <<<"$tmp"|awk '{print $4$5$6$7}')
         current_protocol=$(egrep "^\s+Protocol\s+:" <<<"$tmp"|awk '{print $3}')
@@ -140,12 +141,12 @@ test_cipher_on_target() {
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
     local ciphersuite="$1"
-    local sslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
         debug Connection $i
-        (echo "quit\n" | $sslcommand 2>/dev/null 1>/dev/null)
+        (echo "Q" | $sslcommand 2>/dev/null 1>/dev/null)
         if [ $? -gt 0 ]; then
             break
         fi
@@ -164,9 +165,9 @@ get_cipher_pref() {
     [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
     local ciphersuite="$1"
     if [ -e $CACERTS ]; then
-        local sslcommand="$OPENSSLBIN s_client -CAfile $CACERTS $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -CAfile $CACERTS $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     else
-        local sslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     fi
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     test_cipher_on_target "$sslcommand"
@@ -368,7 +369,7 @@ if [ $ALLCIPHERS -gt 0 ]; then
     echo; echo "All accepted ciphersuites"
     for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
         r="fail"
-        osslcommand="$OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
+        osslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
         test_cipher_on_target "$osslcommand"
         if [ $? -eq 0 ]; then
             r="pass"
