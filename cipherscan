@@ -263,7 +263,7 @@ display_results_in_terminal() {
             echo $result|grep -v '(NONE)'
         else
             # prints priority, ciphersuite, protocols and pfs_keysize
-            echo $result|grep -v '(NONE)'|awk '{print $1 " " $2 " " $3 " " $8}'
+            echo $result|grep -v '(NONE)'|awk '{print $1 " " $2 " " $3 " " $9}'
         fi
     done|column -t
     echo
