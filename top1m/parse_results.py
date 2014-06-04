@@ -75,7 +75,11 @@ for r,d,flist in os.walk(path):
                     continue
 
                 """ store the ciphers supported """
-                if 'AES128-GCM' in entry['cipher'] or 'AES256-GCM' in entry['cipher']:
+                if 'ADH' in entry['cipher'] or 'AECDH' in entry['cipher']:
+                    ciphertypes += 1
+                    name = "z:" + entry['cipher']
+                    cipherstats[name] += 1
+                elif 'AES128-GCM' in entry['cipher'] or 'AES256-GCM' in entry['cipher']:
                     if not AESGCM:
                         AESGCM = True
                         ciphertypes += 1
