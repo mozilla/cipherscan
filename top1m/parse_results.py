@@ -32,6 +32,7 @@ for r,d,flist in os.walk(path):
         tempdsakeystats = {}
         tempsigstats = {}
         tempticketstats = {}
+        tempcipherstats = {}
         ciphertypes = 0
         AESGCM = False
         AES = False
@@ -78,7 +79,7 @@ for r,d,flist in os.walk(path):
                 if 'ADH' in entry['cipher'] or 'AECDH' in entry['cipher']:
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
-                    cipherstats[name] += 1
+                    tempcipherstats[name] = 1
                 elif 'AES128-GCM' in entry['cipher'] or 'AES256-GCM' in entry['cipher']:
                     if not AESGCM:
                         AESGCM = True
@@ -106,7 +107,7 @@ for r,d,flist in os.walk(path):
                 else:
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
-                    cipherstats[name] += 1
+                    tempcipherstats[name] = 1
 
                 """ store key handshake methods """
                 if 'ECDHE' in entry['cipher']:
@@ -231,6 +232,8 @@ for r,d,flist in os.walk(path):
                         cipherstats['RC4 forced in TLS1.1+'] += 1
                 cipherstats['RC4 Preferred'] += 1
 
+        for cipher in tempcipherstats:
+            cipherstats[cipher] += 1
 
         """ store handshake stats """
         if ECDHE:
