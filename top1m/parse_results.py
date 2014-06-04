@@ -55,7 +55,7 @@ for r,d,flist in os.walk(path):
         dualstack = False
         ECDSA = False
         trusted = False
-        ocsp_stapling = False
+        ocsp_stapling = None
 
         """ process the file """
         f_abs = os.path.join(r,f)
@@ -151,13 +151,15 @@ for r,d,flist in os.walk(path):
                 tempsigstats[entry['sigalg'][0]] = 1
 
                 """ save tls ticket hint """
-                tempticketstats[entry['ticket_hint']] = 1
+                if 'ticket_hint' in entry:
+                    tempticketstats[entry['ticket_hint']] = 1
 
                 """ check if OCSP stapling is supported """
-                if entry['ocsp_stapling'] == 'True':
-                    ocsp_stapling=True
-                else:
-                    ocsp_stapling=False
+                if 'ocsp_stapling' in entry:
+                    if entry['ocsp_stapling'] == 'True':
+                        ocsp_stapling=True
+                    else:
+                        ocsp_stapling=False
 
                 """ store the versions of TLS supported """
                 for protocol in entry['protocols']:
@@ -207,7 +209,9 @@ for r,d,flist in os.walk(path):
         for s in tempticketstats:
             tickethint[s] += 1
 
-        if ocsp_stapling:
+        if ocsp_stapling is None:
+            ocspstaple['Unknown'] += 1
+        elif ocsp_stapling:
             ocspstaple['Supported'] += 1
         else:
             ocspstaple['Unsupported'] += 1
@@ -258,6 +262,8 @@ for r,d,flist in os.walk(path):
             handshakestats['ECDHE'] += 1
         if DHE:
             handshakestats['DHE'] += 1
+        if DHE and ECDHE:
+            handshakestats['ECDHE and DHE'] += 1
         if ECDH:
             handshakestats['ECDH'] += 1
         if DH:
