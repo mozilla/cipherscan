@@ -40,9 +40,13 @@ for r,d,flist in os.walk(path):
         DES3 = False
         CAMELLIA = False
         RC4 = False
+        ADH = False
         DHE = False
+        AECDH = False
         ECDHE = False
         RSA = False
+        ECDH = False
+        DH = False
         SSL2 = False
         SSL3 = False
         TLS1 = False
@@ -113,9 +117,19 @@ for r,d,flist in os.walk(path):
                 if 'ECDHE' in entry['cipher']:
                     ECDHE = True
                     temppfsstats[entry['pfs']] = 1
-                elif 'DHE' in entry['cipher']:
+                elif 'DHE' in entry['cipher'] or 'EDH' in entry['cipher']:
                     DHE = True
                     temppfsstats[entry['pfs']] = 1
+                elif 'AECDH' in entry['cipher']:
+                    AECDH = True
+                elif 'ADH' in entry['cipher']:
+                    ADH = True
+                elif 'ECDH' in entry['cipher']:
+                    ECDH = True
+                elif 'DH' in entry['cipher']:
+                    DH = True
+                else:
+                    RSA = True
 
                 """ save the key size """
                 if 'ECDSA' in entry['cipher']:
@@ -236,10 +250,18 @@ for r,d,flist in os.walk(path):
             cipherstats[cipher] += 1
 
         """ store handshake stats """
+        if AECDH:
+            handshakestats['AECDH'] += 1
+        if ADH:
+            handshakestats['ADH'] += 1
         if ECDHE:
             handshakestats['ECDHE'] += 1
         if DHE:
             handshakestats['DHE'] += 1
+        if ECDH:
+            handshakestats['ECDH'] += 1
+        if DH:
+            handshakestats['DH'] += 1
         if RSA:
             handshakestats['RSA'] += 1
 
