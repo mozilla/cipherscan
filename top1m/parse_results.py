@@ -151,7 +151,7 @@ for r,d,flist in os.walk(path):
                     RSA = True
 
                 """ save the key size """
-                if 'ECDSA' in entry['cipher']:
+                if 'ECDSA' in entry['cipher'] or 'ECDH-RSA' in entry['cipher']:
                     ECDSA = True
                     tempecckeystats[entry['pubkey'][0]] = 1
                 elif 'DSS' in entry['cipher']:
