@@ -14,6 +14,12 @@ import json
 import sys
 from collections import defaultdict
 import os
+import re
+
+def natural_sort(l):
+    convert = lambda text: int(text) if text.isdigit() else text.lower()
+    alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ]
+    return sorted(l, key = alphanum_key)
 
 report_untrused=False
 
@@ -340,7 +346,7 @@ for stat in sorted(pfsstats):
 
 print("\nTLS session ticket hint   Count     Percent ")
 print("-------------------------+---------+--------")
-for stat in sorted(tickethint):
+for stat in natural_sort(tickethint):
     percent = round(tickethint[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(tickethint[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
