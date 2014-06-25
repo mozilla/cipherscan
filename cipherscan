@@ -250,13 +250,13 @@ display_results_in_terminal() {
 
     if [ $DOBENCHMARK -eq 1 ]; then
         if [ $different == "True" ]; then
-            header="prio ciphersuite protocols pubkey_size signature_algoritm trusted ticket_hint pfs_keysize avg_handshake_microsec"
+            header="prio ciphersuite protocols pubkey_size signature_algoritm trusted ticket_hint ocsp_staple pfs_keysize avg_handshake_microsec"
         else
             header="prio ciphersuite protocols pfs_keysize avg_handshake_microsec"
         fi
     else
         if [ $different == "True" ]; then
-            header="prio ciphersuite protocols pubkey_size signature_algorithm trusted ticket_hint pfs_keysize"
+            header="prio ciphersuite protocols pubkey_size signature_algorithm trusted ticket_hint ocsp_staple pfs_keysize"
         else
             header="prio ciphersuite protocols pfs_keysize"
         fi
