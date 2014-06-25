@@ -268,7 +268,11 @@ display_results_in_terminal() {
             ctr=$((ctr+1))
         fi
         if [ $different == "True" ]; then
-            echo $result|grep -v '(NONE)'
+            if [[ $(awk '{print $3}' <<< $result) == "SSLv3,TLSv1,TLSv1.1,TLSv1.2" ]]; then
+                echo $result|grep -v '(NONE)' | awk '{print $1 " " $2 " " "SSLv3-TLSv1.2" " " $4 " " $5 " " $6 " " $7 " " $8 " " $9}'
+            else
+                echo $result|grep -v '(NONE)'
+            fi
         else
             # prints priority, ciphersuite, protocols and pfs_keysize
             echo $result|grep -v '(NONE)'|awk '{print $1 " " $2 " " $3 " " $9}'
