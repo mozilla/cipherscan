@@ -78,13 +78,22 @@ debug(){
 test_cipher_on_target() {
     local sslcommand=$@
     cipher=""
+    local cmnd=""
     protocols=""
     pfs=""
     previous_cipher=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
-        debug echo \"Q\" \| $sslcommand $tls_version
-        local tmp=$(echo "Q" | $sslcommand $tls_version 1>/dev/stdout 2>/dev/null)
+        # sslv2 client hello doesn't support SNI extension
+        # in SSLv3 mode OpenSSL just ignores the setting so it's ok
+        # -status exception is ignored in SSLv2, go figure
+        if [ "$tls_version" == "-ssl2" ]; then
+            cmnd=$(sed 's/-servername\ [^ ]*//'<<<$sslcommand)
+        else
+            cmnd=$sslcommand
+        fi
+        debug echo \"Q\" \| $cmnd $tls_version
+        local tmp=$(echo "Q" | $cmnd $tls_version 1>/dev/stdout 2>/dev/null)
         if grep 'OCSP Response Data' <<<"$tmp" >/dev/null; then
             current_ocspstaple="True"
         else
