@@ -54,6 +54,7 @@ FF_RC4_Only_cipherstats = defaultdict(int)
 FF_RC4_preferred_cipherstats = defaultdict(int)
 FF_incompatible_cipherstats = defaultdict(int)
 FF_selected_cipherstats = defaultdict(int)
+cipherordering = defaultdict(int)
 pfsstats = defaultdict(int)
 protocolstats = defaultdict(int)
 handshakestats = defaultdict(int)
@@ -87,6 +88,7 @@ for r,d,flist in os.walk(path):
         RC4_Only_FF = True
         FF_compat = False
         temp_FF_incompat = {}
+        list_of_ciphers = []
         FF_RC4_Pref = None
         FF_selected = None
         ADH = False
@@ -128,15 +130,13 @@ for r,d,flist in os.walk(path):
                 if 'False' in entry['trusted'] and report_untrused == False:
                     continue
 
+                list_of_ciphers.append(entry['cipher'])
+
                 # check if the advertised ciphers are not effectively RC4 Only
                 # for firefox or incompatible with firefox
                 if entry['cipher'] in firefox_ciphers:
                     # if this is first cipher and we already are getting RC4
                     # then it means that RC4 is preferred
-                    if not FF_compat:
-                        FF_selected = entry['cipher']
-                        if 'RC4' in entry['cipher']:
-                            FF_RC4_Pref = True
                     FF_compat = True
                     if not 'RC4' in entry['cipher']:
                         RC4_Only_FF = False
@@ -269,6 +269,32 @@ for r,d,flist in os.walk(path):
 
         if dualstack:
             dsarsastack += 1
+
+        """ save cipher ordering """
+        if 'serverside' in results:
+            if results['serverside'] == "False":
+                cipherordering['Client side'] += 1
+            else:
+                cipherordering['Server side'] += 1
+        else:
+            cipherordering['Unknown'] += 1
+
+        """ simulate handshake with Firefox """
+        if FF_compat:
+            if 'serverside' in results and results['serverside'] == "False":
+                for cipher in firefox_ciphers:
+                    if cipher in list_of_ciphers:
+                        FF_selected = cipher
+                        if 'RC4' in cipher:
+                            FF_RC4_Pref = True
+                        break
+            else:
+                for cipher in list_of_ciphers:
+                    if cipher in firefox_ciphers:
+                        FF_selected = cipher
+                        if 'RC4' in cipher:
+                            FF_RC4_Pref = True
+                        break
 
         for s in tempsigstats:
             sigalg[s] += 1
@@ -412,6 +438,12 @@ print("-------------------------+---------+-------")
 for stat in sorted(cipherstats):
     percent = round(cipherstats[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+print("\nCipher ordering           Count     Percent")
+print("-------------------------+---------+-------")
+for stat in sorted(cipherordering):
+    percent = round(cipherordering[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(cipherordering[stat]).ljust(10) + str(percent).ljust(4) + "\n")
 
 print("\nFF 29 selected ciphers        Count    Percent")
 print("-----------------------------+---------+------")
