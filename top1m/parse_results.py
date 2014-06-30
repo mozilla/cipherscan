@@ -53,6 +53,7 @@ cipherstats = defaultdict(int)
 FF_RC4_Only_cipherstats = defaultdict(int)
 FF_RC4_preferred_cipherstats = defaultdict(int)
 FF_incompatible_cipherstats = defaultdict(int)
+FF_selected_cipherstats = defaultdict(int)
 pfsstats = defaultdict(int)
 protocolstats = defaultdict(int)
 handshakestats = defaultdict(int)
@@ -87,6 +88,7 @@ for r,d,flist in os.walk(path):
         FF_compat = False
         temp_FF_incompat = {}
         FF_RC4_Pref = None
+        FF_selected = None
         ADH = False
         DHE = False
         AECDH = False
@@ -132,6 +134,7 @@ for r,d,flist in os.walk(path):
                     # if this is first cipher and we already are getting RC4
                     # then it means that RC4 is preferred
                     if not FF_compat:
+                        FF_selected = entry['cipher']
                         if 'RC4' in entry['cipher']:
                             FF_RC4_Pref = True
                     FF_compat = True
@@ -318,6 +321,13 @@ for r,d,flist in os.walk(path):
                 cipherstats['RC4 Preferred'] += 1
 
         if FF_compat:
+            if 'ECDHE' in FF_selected:
+                FF_selected_cipherstats['x:ECDHE'] += 1
+            elif 'DHE' in FF_selected or 'EDH' in FF_selected:
+                FF_selected_cipherstats['x:DHE'] += 1
+            else:
+                FF_selected_cipherstats['x:kRSA'] += 1
+            FF_selected_cipherstats[FF_selected] += 1
             if RC4_Only_FF and ciphertypes != 1:
                 cipherstats['x:FF 29 RC4 Only'] += 1
                 for cipher in temp_FF_incompat:
@@ -402,6 +412,12 @@ print("-------------------------+---------+-------")
 for stat in sorted(cipherstats):
     percent = round(cipherstats[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+print("\nFF 29 selected ciphers        Count    Percent")
+print("-----------------------------+---------+------")
+for stat in sorted(FF_selected_cipherstats):
+    percent = round(FF_selected_cipherstats[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(30) + " " + str(FF_selected_cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
 
 print("\nFF 29 RC4 Only other ciphers  Count    Percent")
 print("-----------------------------+---------+------")
