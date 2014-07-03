@@ -104,16 +104,20 @@ test_cipher_on_target() {
         fi
         # filter out the OCSP server certificate
         tmp=$(awk 'BEGIN { pr="yes" } /^======================================/ { if ( pr=="yes" ) pr="no"; else pr="yes" } { if ( pr == "yes" ) print }' <<<"$tmp")
+
+        # session metadata
         current_cipher=$(grep "New, " <<<"$tmp"|awk '{print $5}')
         current_pfs=$(grep 'Server Temp Key' <<<"$tmp"|awk '{print $4$5$6$7}')
         current_protocol=$(egrep "^\s+Protocol\s+:" <<<"$tmp"|awk '{print $3}')
-        current_pubkey=$(grep 'Server public key is ' <<<"$tmp"|awk '{print $5}')
-        if [ -z $current_pubkey ]; then
-            current_pubkey=0
-        fi
         current_tickethint=$(grep 'ticket lifetime hint' <<<"$tmp"|awk '{print $6 }')
         if [ -z $current_tickethint ]; then
             current_tickethint=None
+        fi
+
+        # certificate metadata
+        current_pubkey=$(grep 'Server public key is ' <<<"$tmp"|awk '{print $5}')
+        if [ -z $current_pubkey ]; then
+            current_pubkey=0
         fi
         current_sigalg=$(${OPENSSLBIN} x509 -noout -text 2>/dev/null <<<"$tmp"|grep Signature\ Algorithm | head -n 1 | awk '{print $3}') || current_sigalg="None"
         grep 'Verify return code: 0 ' <<<"$tmp" >/dev/null
@@ -125,6 +129,8 @@ test_cipher_on_target() {
         if [ -z $current_sigalg ]; then
             current_sigalg=None
         fi
+
+        # parsing finished, report result
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
             # connection failed, try again with next TLS version
             continue
