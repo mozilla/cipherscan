@@ -29,10 +29,12 @@ DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
 TIMEOUT=10
-
+# place where to put the found intermediate CA certificates and where
+# trust anchors are stored
+CAPATH=""
 
 usage() {
-    echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [-d|--delay seconds] [-D|--debug] [-j|--json] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
+    echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [--capath directory] [-d|--delay seconds] [-D|--debug] [-j|--json] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
     usage: $0 -h|--help
 
 $0 attempts to connect to a target site using all the ciphersuites it knows.
@@ -46,6 +48,7 @@ Use one of the options below:
 
 -a | --allciphers   Test all known ciphers individually at the end.
 -b | --benchmark    Activate benchmark mode.
+--capath            use CAs from directory
 -d | --delay        Pause for n seconds between connections
 -D | --debug        Output ALL the information.
 -h | --help         Shows this help text.
@@ -197,11 +200,15 @@ bench_cipher() {
 get_cipher_pref() {
     [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
     local ciphersuite="$1"
-    if [ -e $CACERTS ]; then
-        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -CAfile $CACERTS -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
-    else
-        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+
+    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client"
+    if [ -n "$CAPATH" ]; then
+        sslcommand+=" -CApath $CAPATH"
+    elif [ -e $CACERTS ]; then
+        sslcommand+=" -CAfile $CACERTS"
     fi
+    sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     test_cipher_on_target "$sslcommand"
     local success=$?
@@ -359,12 +366,13 @@ test_serverside_ordering() {
         ciphersuite+=":$cipher"
     fi
 
-
-    if [ -e $CACERTS ]; then
-        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -CAfile $CACERTS -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
-    else
-        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client"
+    if [ -n "$CAPATH" ]; then
+        sslcommand+=" -CApath $CAPATH"
+    elif [ -e "$CACERTS" ]; then
+        sslcommand+=" -CAfile $CACERTS"
     fi
+    sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
 
     test_cipher_on_target "$sslcommand"
     if [ $? -ne 0 ]; then
@@ -414,6 +422,10 @@ do
             ;;
         -d | --delay)
             DELAY=$2
+            shift 2
+            ;;
+        --capath)
+            CAPATH="$2"
             shift 2
             ;;
         --) # End of all options
