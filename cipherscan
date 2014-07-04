@@ -48,7 +48,7 @@ Use one of the options below:
 
 -a | --allciphers   Test all known ciphers individually at the end.
 -b | --benchmark    Activate benchmark mode.
---capath            use CAs from directory
+--capath            use CAs from directory, save intermediate certificates there
 -d | --delay        Pause for n seconds between connections
 -D | --debug        Output ALL the information.
 -h | --help         Shows this help text.
@@ -77,6 +77,23 @@ debug(){
     fi
 }
 
+c_hash() {
+    local h=$(${OPENSSLBIN} x509 -hash -noout -in "$1/$2" 2>/dev/null)
+    for num in $(seq 0 100); do
+        if [[ $1/${h}.${num} -ef $2 ]]; then
+            # file already linked, ignore
+            break
+        fi
+        if [[ ! -e $1/${h}.${num} ]]; then
+            # file doesn't exist, create a link
+            pushd "$1" > /dev/null
+            ln -s "$2" "${h}.${num}"
+            popd > /dev/null
+            break
+        fi
+    done
+}
+
 # Connect to a target host with the selected ciphersuite
 test_cipher_on_target() {
     local sslcommand=$@
@@ -85,6 +102,7 @@ test_cipher_on_target() {
     protocols=""
     pfs=""
     previous_cipher=""
+    certificates=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
         # sslv2 client hello doesn't support SNI extension
@@ -130,6 +148,63 @@ test_cipher_on_target() {
             current_sigalg=None
         fi
 
+        # collect certificate data
+        current_certificates=""
+        local certificate_count=$(grep --count -- '-----END CERTIFICATE-----'\
+            <<<"$tmp")
+        debug "server presented $certificate_count certificates"
+        local i
+        for ((i=0; i<$certificate_count; i=i+1 )); do
+
+            # extract i'th certificate
+            local cert=$(awk -v i=$i 'split_after == 1 {n++;split_after=0}
+            /-----END CERTIFICATE-----/ {split_after=1}
+            {if (n == i) print }
+            ' <<<"$tmp")
+
+            # compute sha256 fingerprint of the certificate
+            local sha256sum=$(${OPENSSLBIN} x509 -outform DER <<<"$cert" 2>/dev/null |\
+                ${OPENSSLBIN} dgst -sha256 -r 2>/dev/null| awk '{print $1}')
+
+            # check if it is a CA certificate
+            local isCA="False"
+            if ${OPENSSLBIN} x509 -noout -text <<<"$cert" 2>/dev/null |\
+                grep 'CA:TRUE' >/dev/null; then
+                isCA="True"
+            fi
+
+            # build trust source for certificate verification
+            local trust_source=()
+            if [[ -n $CAPATH ]]; then
+                trust_source=("-CApath" "$CAPATH")
+            elif [[ -e $CACERTS ]]; then
+                trust_source=("-CAfile" "$CACERTS")
+            fi
+
+            # check if the certificate is actually trusted (server may present
+            # unrelated certificates that are not trusted (including self
+            # signed ones)
+            if ${OPENSSLBIN} verify "${trust_source[@]}" \
+                -untrusted <(echo "$tmp") <(echo "$cert") 2>/dev/null | \
+                grep 'OK$' >/dev/null; then
+
+                # if the certificate is an intermediate CA it may be useful
+                # for connecting to servers that are misconfigured so save it
+                if [[ -n $CAPATH ]] && [[ $isCA == "True" ]]; then
+                    if [[ ! -e "$CAPATH/${sha256sum}.pem" ]]; then
+                        echo "$cert" > "$CAPATH/${sha256sum}.pem"
+                        c_hash "$CAPATH" "${sha256sum}.pem"
+                    fi
+                fi
+            fi
+            # save the sha sum for reporting
+            if [ -n "${current_certificates}" ]; then
+                current_certificates+=","
+            fi
+            current_certificates+="\"${sha256sum}\""
+        done
+        debug "current_certificates: $current_certificates"
+
         # parsing finished, report result
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
             # connection failed, try again with next TLS version
@@ -156,6 +231,7 @@ test_cipher_on_target() {
         trusted=$current_trusted
         tickethint=$current_tickethint
         ocspstaple=$current_ocspstaple
+        certificates="$current_certificates"
         # grab the cipher and PFS key size
     done
     # if cipher is empty, that means none of the TLS version worked with
@@ -209,7 +285,7 @@ get_cipher_pref() {
 
     local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client"
     if [ -n "$CAPATH" ]; then
-        sslcommand+=" -CApath $CAPATH"
+        sslcommand+=" -CApath $CAPATH -showcerts"
     elif [ -e $CACERTS ]; then
         sslcommand+=" -CAfile $CACERTS"
     fi
@@ -221,6 +297,7 @@ get_cipher_pref() {
     # If the connection succeeded with the current cipher, benchmark and store
     if [ $success -eq 0 ]; then
         cipherspref=("${cipherspref[@]}" "$result")
+        ciphercertificates=("${ciphercertificates[@]}" "$certificates")
         pciph=$(echo $result|awk '{print $1}')
         get_cipher_pref "!$pciph:$ciphersuite"
         return 0
@@ -333,6 +410,9 @@ display_results_in_json() {
         echo -n "\"pubkey\":[\"$(echo $cipher|awk '{print $3}'|sed 's/,/","/g')\"],"
         echo -n "\"sigalg\":[\"$(echo $cipher|awk '{print $4}'|sed 's/,/","/g')\"],"
         echo -n "\"trusted\":\"$(echo $cipher|awk '{print $5}'|sed 's/,/","/g')\","
+        if [[ -n $CAPATH ]]; then
+            echo -n "\"certificates\":[${ciphercertificates[$ctr]}],"
+        fi
         echo -n "\"ticket_hint\":\"$(echo $cipher|awk '{print $6}')\","
         echo -n "\"ocsp_stapling\":\"$(echo $cipher|awk '{print $7}')\","
         pfs=$(echo $cipher|awk '{print $8}')
@@ -378,7 +458,7 @@ test_serverside_ordering() {
 
     local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client"
     if [ -n "$CAPATH" ]; then
-        sslcommand+=" -CApath $CAPATH"
+        sslcommand+=" -CApath $CAPATH -showcerts"
     elif [ -e "$CACERTS" ]; then
         sslcommand+=" -CAfile $CACERTS"
     fi
@@ -482,6 +562,7 @@ debug "sclientargs: $SCLIENTARGS"
 
 
 cipherspref=();
+ciphercertificates=()
 results=()
 
 # Call to the recursive loop that retrieves the cipher preferences
