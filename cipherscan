@@ -33,6 +33,8 @@ TIMEOUT=10
 # trust anchors are stored
 CAPATH=""
 SAVECRT=""
+unset ok_protocols
+declare -A ok_protocols
 
 usage() {
     echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [--capath directory] [-d|--delay seconds] [-D|--debug] [-j|--json] [--savecrt directory] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
@@ -107,6 +109,9 @@ test_cipher_on_target() {
     certificates=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
+        if [[ ${ok_protocols[$tls_version]} -eq 1 ]]; then
+            continue
+        fi
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
         # -status exception is ignored in SSLv2, go figure
@@ -218,6 +223,7 @@ test_cipher_on_target() {
 
         # parsing finished, report result
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
+            ok_protocols["$tls_version"]=1
             # connection failed, try again with next TLS version
             continue
         else
@@ -286,7 +292,6 @@ bench_cipher() {
     # Microseconds
     cipherbenchms="$((t/1000/$BENCHMARKITER))"
 }
-
 
 # Connect to the target and retrieve the chosen cipher
 # recursively until the connection fails
@@ -582,6 +587,8 @@ results=()
 
 # Call to the recursive loop that retrieves the cipher preferences
 get_cipher_pref $CIPHERSUITE
+unset ok_protocols
+declare -A ok_protocols
 
 test_serverside_ordering
 
