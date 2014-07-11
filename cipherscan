@@ -52,6 +52,8 @@ unset known_certs
 declare -A known_certs
 unset cert_checksums
 declare -A cert_checksums
+unset ok_protocols
+declare -A ok_protocols
 
 # because running external commands like sleep incurs a fork penalty, we
 # first check if it is necessary
@@ -134,6 +136,9 @@ test_cipher_on_target() {
     certificates=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
+        if [[ ${ok_protocols[$tls_version]} -eq 1 ]]; then
+            continue
+        fi
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
         # -status exception is ignored in SSLv2, go figure
@@ -259,6 +264,7 @@ test_cipher_on_target() {
 
         # parsing finished, report result
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
+            ok_protocols["$tls_version"]=1
             # connection failed, try again with next TLS version
             continue
         else
@@ -626,6 +632,8 @@ results=()
 
 # Call to the recursive loop that retrieves the cipher preferences
 get_cipher_pref $CIPHERSUITE
+unset ok_protocols
+declare -A ok_protocols
 
 test_serverside_ordering
 
