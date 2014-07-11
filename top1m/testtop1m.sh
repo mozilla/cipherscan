@@ -9,6 +9,30 @@ if [ $(ulimit -u) -lt $((10*absolute_max_bg)) ]; then
     exit 1
 fi
 [ ! -e "results" ] && mkdir results
+[ ! -e "certs" ] && mkdir certs
+if [ ! -e "ca_files" ]; then
+    mkdir ca_files
+    pushd ca_files >/dev/null
+    awk '
+      split_after == 1 {n++;split_after=0}
+      /-----END CERTIFICATE-----/ {split_after=1}
+      {print > "cert" n ".pem"}' < "/etc/pki/tls/certs/ca-bundle.crt"
+    for i in *; do
+        h=$(../../openssl x509 -hash -noout -in "$i" 2>/dev/null)
+        for num in `seq 0 100`; do
+            if [[ $h.$num -ef $i ]]; then
+                # file already linked, ignore
+                break
+            fi
+            if [[ ! -e $h.$num ]]; then
+                # file doesn't exist, create a link
+                ln -s "$i" "$h.$num"
+                break
+            fi
+        done
+    done
+    popd >/dev/null
+fi
 
 function wait_for_jobs() {
     local no_jobs
@@ -32,7 +56,7 @@ function scan_host() {
     if [ $? -gt 0 ]; then
         return
     fi
-    ../cipherscan -json -servername $1 $2:443 > results/$1@$2
+    ../cipherscan --capath ca_files --savecrt certs -json -servername $1 $2:443 > results/$1@$2
 }
 
 function scan_host_no_sni() {
@@ -44,7 +68,7 @@ function scan_host_no_sni() {
     if [ $? -gt 0 ]; then
         return
     fi
-    ../cipherscan -json $1:443 > results/$1
+    ../cipherscan --capath ca_files --savecrt certs -json $1:443 > results/$1
 }
 
 function scan_hostname() {
