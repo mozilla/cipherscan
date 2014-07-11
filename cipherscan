@@ -188,6 +188,8 @@ test_cipher_on_target() {
             /-----END CERTIFICATE-----/ {split_after=1}
             {if (n == i) print }
             ' <<<"$tmp")
+            # clean up the cert from junk before BEGIN CERTIFICATE
+            cert=$(${OPENSSLBIN} x509 <<<"$cert" 2>/dev/null)
 
             # compute sha256 fingerprint of the certificate
             local sha256sum=$(${OPENSSLBIN} x509 -outform DER <<<"$cert" 2>/dev/null |\
