@@ -48,6 +48,10 @@ TIMEOUT=30
 # trust anchors are stored
 CAPATH=""
 SAVECRT=""
+unset known_certs
+declare -A known_certs
+unset cert_checksums
+declare -A cert_checksums
 
 # because running external commands like sleep incurs a fork penalty, we
 # first check if it is necessary
@@ -184,15 +188,25 @@ test_cipher_on_target() {
         for ((i=0; i<$certificate_count; i=i+1 )); do
 
             # extract i'th certificate
-            local cert=$(awk -v i=$i 'split_after == 1 {n++;split_after=0}
-            /-----END CERTIFICATE-----/ {split_after=1}
-            {if (n == i) print }
-            ' <<<"$tmp")
-            # clean up the cert from junk before BEGIN CERTIFICATE
-            cert=$(${OPENSSLBIN} x509 <<<"$cert" 2>/dev/null)
+            local cert=$(awk -v i=$i 'BEGIN { output=0;n=0 }
+            /-----BEGIN CERTIFICATE-----/ { output=1 }
+            output==1 { if (n==i) print }
+            /-----END CERTIFICATE-----/ { output=0; n++ }' <<<"$tmp")
+            # put the output to an array instead awk '{print $1}'
+            local cksum=($(cksum <<<"$cert"))
+            # compare the values not just checksums so that eventual collision
+            # doesn't mess up results
+            if [[ ${known_certs[$cksum]} == $cert ]]; then
+                if [ -n "${current_certificates}" ]; then
+                    current_certificates+=","
+                fi
+                current_certificates+="\"${cert_checksums[$cksum]}\""
+                continue
+            fi
 
             # compute sha256 fingerprint of the certificate
-            local sha256sum=$(${OPENSSLBIN} x509 -outform DER <<<"$cert" 2>/dev/null |\
+            local sha256sum=$(${OPENSSLBIN} x509 -outform DER\
+                <<<"$cert" 2>/dev/null |\
                 ${OPENSSLBIN} dgst -sha256 -r 2>/dev/null| awk '{print $1}')
 
             # check if it is a CA certificate
@@ -238,6 +252,8 @@ test_cipher_on_target() {
                 current_certificates+=","
             fi
             current_certificates+="\"${sha256sum}\""
+            known_certs[$cksum]="$cert"
+            cert_checksums[$cksum]="$sha256sum"
         done
         debug "current_certificates: $current_certificates"
 
