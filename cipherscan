@@ -192,7 +192,7 @@ test_cipher_on_target() {
             /-----BEGIN CERTIFICATE-----/ { output=1 }
             output==1 { if (n==i) print }
             /-----END CERTIFICATE-----/ { output=0; n++ }' <<<"$tmp")
-            # put the output to an array instead awk '{print $1}'
+            # put the output to an array instead running awk '{print $1}'
             local cksum=($(cksum <<<"$cert"))
             # compare the values not just checksums so that eventual collision
             # doesn't mess up results
@@ -348,7 +348,7 @@ get_cipher_pref() {
     if [ $success -eq 0 ]; then
         cipherspref=("${cipherspref[@]}" "$result")
         ciphercertificates=("${ciphercertificates[@]}" "$certificates")
-        pciph=$(echo $result|awk '{print $1}')
+        pciph=($(echo $result))
         get_cipher_pref "!$pciph:$ciphersuite"
         return 0
     fi
@@ -365,7 +365,7 @@ display_results_in_terminal() {
     local different=False
     echo "Target: $TARGET"; echo
     for cipher in "${cipherspref[@]}"; do
-        pciph=$(echo $cipher|awk '{print $1}')
+        pciph=($(echo $cipher))
         if [ $DOBENCHMARK -eq 1 ]; then
             bench_cipher "$pciph"
             r="$ctr $cipher $cipherbenchms"
@@ -419,7 +419,7 @@ display_results_in_terminal() {
             echo $result|grep -v '(NONE)'
         else
             # prints priority, ciphersuite, protocols and pfs_keysize
-            echo $result|grep -v '(NONE)'|awk '{print $1 " " $2 " " $3 " " $9}'
+            awk '!/(NONE)/{print $1 " " $2 " " $3 " " $9}' <<<"$result"
         fi
     done|column -t
     echo
