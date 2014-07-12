@@ -173,7 +173,7 @@ test_cipher_on_target() {
             /-----BEGIN CERTIFICATE-----/ { output=1 }
             output==1 { if (n==i) print }
             /-----END CERTIFICATE-----/ { output=0; n++ }' <<<"$tmp")
-            # put the output to an array instead awk '{print $1}'
+            # put the output to an array instead running awk '{print $1}'
             local cksum=($(cksum <<<"$cert"))
             # compare the values not just checksums so that eventual collision
             # doesn't mess up results
@@ -331,7 +331,7 @@ get_cipher_pref() {
     if [ $success -eq 0 ]; then
         cipherspref=("${cipherspref[@]}" "$result")
         ciphercertificates=("${ciphercertificates[@]}" "$certificates")
-        pciph=$(echo $result|awk '{print $1}')
+        pciph=($(echo $result))
         get_cipher_pref "!$pciph:$ciphersuite"
         return 0
     fi
@@ -349,7 +349,7 @@ display_results_in_terminal() {
     local ocspstaple
     local different=False
     for cipher in "${cipherspref[@]}"; do
-        pciph=$(echo $cipher|awk '{print $1}')
+        pciph=($(echo $cipher))
         if [ $DOBENCHMARK -eq 1 ]; then
             bench_cipher "$pciph"
             r="$ctr $cipher $cipherbenchms"
@@ -401,13 +401,13 @@ display_results_in_terminal() {
         fi
         if [ $different == "True" ]; then
             if [[ $(awk '{print $3}' <<< $result) == "SSLv3,TLSv1,TLSv1.1,TLSv1.2" ]]; then
-                echo $result|grep -v '(NONE)' | awk '{print $1 " " $2 " " "SSLv3-TLSv1.2" " " $4 " " $5 " " $6 " " $7 " " $8 " " $9}'
+                awk '!/(NONE)/{print $1 " " $2 " " "SSLv3-TLSv1.2" " " $4 " " $5 " " $6 " " $7 " " $8 " " $9}' <<<"$result"
             else
                 echo $result|grep -v '(NONE)'
             fi
         else
             # prints priority, ciphersuite, protocols and pfs_keysize
-            echo $result|grep -v '(NONE)'|awk '{print $1 " " $2 " " $3 " " $9}'
+            awk '!/(NONE)/{print $1 " " $2 " " $3 " " $9}' <<<"$result"
         fi
     done|column -t
     echo
