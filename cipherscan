@@ -60,6 +60,7 @@ verbose() {
 debug(){
     if [ $DEBUG == 1 ]; then
         echo Debug: "$@" >&2
+	set -evx
     fi
 }
 
