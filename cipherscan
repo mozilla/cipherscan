@@ -8,7 +8,14 @@
 DOBENCHMARK=0
 BENCHMARKITER=30
 OPENSSLBIN="$(dirname $0)/openssl"
-CACERTS=${CACERTS:-/etc/pki/tls/certs/ca-bundle.crt}
+if [ -z "$CACERTS" ]; then
+  for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
+    if [ -e "$f" ]; then
+      CACERTS="$f"
+      break
+    fi
+  done
+fi
 if [ ! -e "$CACERTS" ]; then
     echo "Warning: CA Certificates not found at $CACERTS, export CACERTS variable with location of your trust anchors" 1>&2
 fi
@@ -326,6 +333,7 @@ do
 done
 
 if [ $VERBOSE != 0 ] ; then
+    [ -n "$CACERTS" ] && echo "Using trust anchors from $CACERTS"
     echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
          $OPENSSLBIN ciphers ALL 2>/dev/null
 fi
