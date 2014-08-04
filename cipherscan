@@ -211,7 +211,7 @@ test_cipher_on_target() {
             local saved="False"
             if ${OPENSSLBIN} verify "${trust_source[@]}" \
                 -untrusted <(echo "$tmp") <(echo "$cert") 2>/dev/null | \
-                grep 'OK$' >/dev/null; then
+                grep ': OK$' >/dev/null; then
 
                 # if the certificate is an intermediate CA it may be useful
                 # for connecting to servers that are misconfigured so save it
