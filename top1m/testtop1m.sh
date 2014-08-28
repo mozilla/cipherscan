@@ -1,16 +1,84 @@
 #!/usr/bin/env bash
-parallel=50
-max_bg=400
+parallel=10
+max_bg=50
+absolute_max_bg=100
+max_load=50
+
+if [ $(ulimit -u) -lt $((10*absolute_max_bg)) ]; then
+    echo "max user processes too low, use ulimit -u to increase"
+    exit 1
+fi
 [ ! -e "results" ] && mkdir results
 
 function wait_for_jobs() {
     local no_jobs
     no_jobs=$(jobs | wc -l)
 
-    while [ $no_jobs -gt $1 ]; do
+    while [ $no_jobs -gt $1 ] || awk -v maxload=$max_load '{ if ($1 < maxload) exit 1 }' /proc/loadavg; do
+        if awk -v maxload=$max_load '{ if ($1 > maxload) exit 1 }' /proc/loadavg && [ $no_jobs -lt $absolute_max_bg ]; then
+            return
+        fi
         sleep 1
         no_jobs=$(jobs | wc -l)
     done
+}
+
+function scan_host() {
+    # do not scan the same host multiple times
+    if [ -e results/$1@$2 ]; then
+        return
+    fi
+    tcping -u 10000000 $2 443;
+    if [ $? -gt 0 ]; then
+        return
+    fi
+    ../cipherscan -json -servername $1 $2:443 > results/$1@$2
+}
+
+function scan_host_no_sni() {
+    # do not scan the same host multiple times
+    if [ -e results/$1 ]; then
+        return
+    fi
+    tcping -u 10000000 $1 443;
+    if [ $? -gt 0 ]; then
+        return
+    fi
+    ../cipherscan -json $1:443 > results/$1
+}
+
+function scan_hostname() {
+    if [[ ! -z $(awk -F. '$1>=0 && $1<=255 && $2>=0 && $2<=255 &&
+        $3>=0 && $3<=255 && $4>=0 && $4<=255 && NF==4' <<<"$1") ]]; then
+        scan_host_no_sni $1
+        return
+    fi
+
+    local host_ips=$(host $1 | awk '/has address/ {print $4}')
+    local www_ips=$(host www.$1 | awk '/has address/ {print $4}')
+    if [ ! -z "$host_ips" ] && [ ! -z "$www_ips" ]; then
+        # list of IPs that are in www but not in host
+        local diff=$(grep -Fv "$host_ips" <<< "$www_ips")
+        head -n 1 <<< "$host_ips" | while read ip; do
+            scan_host $1 $ip
+        done
+        if [ ! -z "$diff" ]; then
+            head -n 1 <<<"$diff" | while read ip; do
+                scan_host www.$1 $ip
+            done
+        fi
+    else
+        if [ ! -z "$host_ips" ]; then
+            head -n 1 <<<"$host_ips" | while read ip; do
+                scan_host $1 $ip
+            done
+        fi
+        if [ ! -z "$www_ips" ]; then
+            head -n 1 <<<"$www_ips" | while read ip; do
+                scan_host www.$1 $ip
+            done
+        fi
+    fi
 }
 
 i=0
@@ -18,18 +86,9 @@ count=$(wc -l top-1m.csv | awk '{print $1}')
 while [ $i -lt $count ]
 do
     echo processings sites $i to $((i + parallel))
-    for t in $(tail -$(($count - $i)) top-1m.csv | head -$parallel |cut -d ',' -f 2)
+    for t in $(tail -$(($count - $i)) top-1m.csv | head -$parallel |cut -d ',' -f 2|cut -d "/" -f 1)
     do
-        (tcping -u 10000000 $t 443;
-         if [ $? -gt 0 ];then 
-             tcping -u 10000000 www.$t 443; 
-             if [ $? -gt 0 ]; then 
-                 continue; 
-             else 
-                 ../cipherscan -json www.$t:443 > results/www.$t
-                 continue;
-             fi;
-         fi;../cipherscan -json $t:443 > results/$t )&
+        (scan_hostname $t)&
     done
     i=$(( i + parallel))
     wait_for_jobs $max_bg

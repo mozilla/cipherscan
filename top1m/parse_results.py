@@ -23,6 +23,8 @@ protocolstats = defaultdict(int)
 handshakestats = defaultdict(int)
 keysize = defaultdict(int)
 sigalg = defaultdict(int)
+tickethint = defaultdict(int)
+ocspstaple = defaultdict(int)
 dsarsastack = 0
 total = 0
 for r,d,flist in os.walk(path):
@@ -35,6 +37,8 @@ for r,d,flist in os.walk(path):
         tempecckeystats = {}
         tempdsakeystats = {}
         tempsigstats = {}
+        tempticketstats = {}
+        tempcipherstats = {}
         ciphertypes = 0
         AESGCM = False
         AES = False
@@ -42,9 +46,13 @@ for r,d,flist in os.walk(path):
         DES3 = False
         CAMELLIA = False
         RC4 = False
+        ADH = False
         DHE = False
+        AECDH = False
         ECDHE = False
         RSA = False
+        ECDH = False
+        DH = False
         SSL2 = False
         SSL3 = False
         TLS1 = False
@@ -53,6 +61,7 @@ for r,d,flist in os.walk(path):
         dualstack = False
         ECDSA = False
         trusted = False
+        ocsp_stapling = None
 
         """ process the file """
         f_abs = os.path.join(r,f)
@@ -77,7 +86,11 @@ for r,d,flist in os.walk(path):
                     continue
 
                 """ store the ciphers supported """
-                if 'AES128-GCM' in entry['cipher'] or 'AES256-GCM' in entry['cipher']:
+                if 'ADH' in entry['cipher'] or 'AECDH' in entry['cipher']:
+                    ciphertypes += 1
+                    name = "z:" + entry['cipher']
+                    tempcipherstats[name] = 1
+                elif 'AES128-GCM' in entry['cipher'] or 'AES256-GCM' in entry['cipher']:
                     if not AESGCM:
                         AESGCM = True
                         ciphertypes += 1
@@ -104,15 +117,25 @@ for r,d,flist in os.walk(path):
                 else:
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
-                    cipherstats[name] += 1
+                    tempcipherstats[name] = 1
 
                 """ store key handshake methods """
                 if 'ECDHE' in entry['cipher']:
                     ECDHE = True
                     temppfsstats[entry['pfs']] = 1
-                elif 'DHE' in entry['cipher']:
+                elif 'DHE' in entry['cipher'] or 'EDH' in entry['cipher']:
                     DHE = True
                     temppfsstats[entry['pfs']] = 1
+                elif 'AECDH' in entry['cipher']:
+                    AECDH = True
+                elif 'ADH' in entry['cipher']:
+                    ADH = True
+                elif 'ECDH' in entry['cipher']:
+                    ECDH = True
+                elif 'DH' in entry['cipher']:
+                    DH = True
+                else:
+                    RSA = True
 
                 """ save the key size """
                 if 'ECDSA' in entry['cipher']:
@@ -132,6 +155,17 @@ for r,d,flist in os.walk(path):
 
                 """ save key signatures size """
                 tempsigstats[entry['sigalg'][0]] = 1
+
+                """ save tls ticket hint """
+                if 'ticket_hint' in entry:
+                    tempticketstats[entry['ticket_hint']] = 1
+
+                """ check if OCSP stapling is supported """
+                if 'ocsp_stapling' in entry:
+                    if entry['ocsp_stapling'] == 'True':
+                        ocsp_stapling=True
+                    else:
+                        ocsp_stapling=False
 
                 """ store the versions of TLS supported """
                 for protocol in entry['protocols']:
@@ -175,6 +209,19 @@ for r,d,flist in os.walk(path):
         for s in tempsigstats:
             sigalg[s] += 1
 
+        if len(tempticketstats) == 1:
+            for s in tempticketstats:
+                tickethint[s + " only"] += 1
+        for s in tempticketstats:
+            tickethint[s] += 1
+
+        if ocsp_stapling is None:
+            ocspstaple['Unknown'] += 1
+        elif ocsp_stapling:
+            ocspstaple['Supported'] += 1
+        else:
+            ocspstaple['Unsupported'] += 1
+
         """ store cipher stats """
         if AESGCM:
             cipherstats['AES-GCM'] += 1
@@ -209,12 +256,24 @@ for r,d,flist in os.walk(path):
                         cipherstats['RC4 forced in TLS1.1+'] += 1
                 cipherstats['RC4 Preferred'] += 1
 
+        for cipher in tempcipherstats:
+            cipherstats[cipher] += 1
 
         """ store handshake stats """
+        if AECDH:
+            handshakestats['AECDH'] += 1
+        if ADH:
+            handshakestats['ADH'] += 1
         if ECDHE:
             handshakestats['ECDHE'] += 1
         if DHE:
             handshakestats['DHE'] += 1
+        if DHE and ECDHE:
+            handshakestats['ECDHE and DHE'] += 1
+        if ECDH:
+            handshakestats['ECDH'] += 1
+        if DH:
+            handshakestats['DH'] += 1
         if RSA:
             handshakestats['RSA'] += 1
 
@@ -279,6 +338,12 @@ for stat in sorted(pfsstats):
         pfspercent = round(pfsstats[stat] / handshakestats['DHE'] * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(pfsstats[stat]).ljust(10) + str(percent).ljust(9) + str(pfspercent) + "\n")
 
+print("\nTLS session ticket hint   Count     Percent ")
+print("-------------------------+---------+--------")
+for stat in sorted(tickethint):
+    percent = round(tickethint[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(tickethint[stat]).ljust(10) + str(percent).ljust(9) + "\n")
+
 print("\nCertificate sig alg     Count     Percent ")
 print("-------------------------+---------+--------")
 for stat in sorted(sigalg):
@@ -292,6 +357,12 @@ for stat in sorted(keysize):
     sys.stdout.write(stat.ljust(25) + " " + str(keysize[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
 sys.stdout.write("RSA/ECDSA Dual Stack".ljust(25) + " " + str(dsarsastack).ljust(10) + str(round(dsarsastack/total * 100, 4)) + "\n")
+
+print("\nOCSP stapling             Count     Percent ")
+print("-------------------------+---------+--------")
+for stat in sorted(ocspstaple):
+    percent = round(ocspstaple[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(ocspstaple[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
 print("\nSupported Protocols       Count     Percent")
 print("-------------------------+---------+-------")
