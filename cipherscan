@@ -387,8 +387,8 @@ debug "Port: $PORT"
 TARGET=$HOST:$PORT
 debug "target: $TARGET"
 
-
-SCLIENTARGS=$(sed -e s,${TEMPTARGET},,<<<"${@}")
+SNI_FIX="-servername ${HOST}"
+SCLIENTARGS="$SNI_FIX $(sed -e s,${TEMPTARGET},,<<<"${@}")"
 debug "sclientargs: $SCLIENTARGS"
 
 
