@@ -8,15 +8,18 @@ On Linux x86_64 run: ./cipherscan www.google.com:443
 On any other *nix or *tux run: ./cipherscan -o /path/to/openssl www.google.com:443
 and watch.
 
-The newer your version of openssl, the better results you'll get. Versions
-of OpenSSL below 1.0.1 don't support TLS1.2 ciphers, elliptic curves, etc... Build your own or test what your system's OpenSSL supports.
+On FreeBSD, you will need the following ports: textproc/gnugrep and sysutils/coreutils
+
+The newer your version of openssl, the better results you'll get. Versions of OpenSSL below 1.0.1 don't support TLS1.2 ciphers, elliptic curves, etc...
+Version 1.0.2 gives extra information about the ciphers used for the key exchange.
+Build your own or test what your system's OpenSSL supports.
 
 Cipherscan should work fine on Linux, Mac OS X, Solaris, Illumos, SmartOS, OpenIndiana if you specify a an openssl binary with -o.
 
 Build OpenSSL with ChaCha20-Poly1305 support (Optional)
 -------------------------------------------------------
 
-The OpenSSL binary in this repository is built for 64bit Linux. If you wish to build a version with the same features for your own platform, [the snapshot from the OpenSSL gitweb view](http://git.openssl.org/gitweb/?p=openssl.git;a=tree;h=161b23361778c155f9c174694b1db2506a2e0b52;hb=9a8646510b) and build it like this:
+The OpenSSL binary in this repository is built for 64bit Linux. If you wish to build a version with the same features for your own platform, you can use [this snapshot from the OpenSSL gitweb view](http://git.openssl.org/gitweb/?p=openssl.git;a=tree;h=161b23361778c155f9c174694b1db2506a2e0b52;hb=9a8646510b) or [this Github repository](https://github.com/PeterMosmans/openssl) and build it like this:
 
 ```
 ./config no-shared
@@ -226,3 +229,4 @@ Contributors
 * Pepi Zawodsky <git@maclemon.at>
 * Michael Zeltner <m@niij.org>
 * Simon Deziel <simon.deziel@gmail.com>
+* Olivier Paroz <opa-github@interfasys.ch>

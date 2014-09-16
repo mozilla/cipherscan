@@ -4,9 +4,19 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # Author: Julien Vehent [:ulfr] - 2013
+#
+# Modified by Olivier Paroz in September 2014
+#
+# On FreeBSD, you will need the following ports: textproc/gnugrep and sysutils/coreutils
+#
 
+OS=`uname`
 DOBENCHMARK=0
 BENCHMARKITER=30
+TIMEOUTBIN=timeout
+if [ "${OS}" = "FreeBSD" ]; then
+	TIMEOUTBIN=gtimeout
+fi
 OPENSSLBIN="$(dirname $0)/openssl"
 if [ -z "$CACERTS" ]; then
   for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
@@ -33,10 +43,14 @@ TIMEOUT=10
 
 usage() {
     echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [-d|--delay seconds] [-D|--debug] [-j|--json] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
-    usage: $0 -h|--help
+usage: $0 -h|--help
 
 $0 attempts to connect to a target site using all the ciphersuites it knows.
-Julien Vehent [:ulfr] - https://github.com/jvehent/cipherscan
+
+Original script by Julien Vehent. [:ulfr] - https://github.com/jvehent/cipherscan
+FreeBSD version by Olivier Paroz. [:ulfr] - https://github.com/oparoz/cipherscan
+
+On FreeBSD, you will need the following ports on FreeBSD: textproc/gnugrep and sysutils/coreutils
 
 Port defaults to 443
 
@@ -165,7 +179,7 @@ test_cipher_on_target() {
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
     local ciphersuite="$1"
-    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
@@ -189,9 +203,9 @@ get_cipher_pref() {
     [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
     local ciphersuite="$1"
     if [ -e $CACERTS ]; then
-        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -CAfile $CACERTS -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client -CAfile $CACERTS -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     else
-        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     fi
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     test_cipher_on_target "$sslcommand"
@@ -410,7 +424,7 @@ if [ $ALLCIPHERS -gt 0 ]; then
     echo; echo "All accepted ciphersuites"
     for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
         r="fail"
-        osslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
+        osslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
         test_cipher_on_target "$osslcommand"
         if [ $? -eq 0 ]; then
             r="pass"
