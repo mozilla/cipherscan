@@ -39,6 +39,7 @@ DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
 TIMEOUT=10
+SNISCAN=0
 
 
 usage() {
@@ -50,7 +51,7 @@ $0 attempts to connect to a target site using all the ciphersuites it knows.
 Original script by Julien Vehent. [:ulfr] - https://github.com/jvehent/cipherscan
 FreeBSD version by Olivier Paroz. [:ulfr] - https://github.com/oparoz/cipherscan
 
-On FreeBSD, you will need the following ports on FreeBSD: textproc/gnugrep and sysutils/coreutils
+OpenSSL 1.0.2 is a REQUIREMENT and you will also need the following ports on FreeBSD: textproc/gnugrep and sysutils/coreutils
 
 Port defaults to 443
 
@@ -65,6 +66,7 @@ Use one of the options below:
 -h | --help         Shows this help text.
 -j | --json         Output results in JSON format.
 -o | --openssl      path/to/your/openssl binary you want to use.
+-s | --sni			Activates SNI
 -v | --verbose      Increase verbosity.
 
 The rest of the arguments will be interpreted as openssl s_client argument.
@@ -338,6 +340,10 @@ do
             OPENSSLBIN=$2     # You might want to check if you really got FILE
             shift 2
             ;;
+		-s | --sni)
+            SNISCAN=1
+            shift
+            ;;
         -a | --allciphers)
             ALLCIPHERS=1
             shift
@@ -401,8 +407,11 @@ debug "Port: $PORT"
 TARGET=$HOST:$PORT
 debug "target: $TARGET"
 
-SNI_FIX="-servername ${HOST}"
-SCLIENTARGS="$SNI_FIX $(sed -e s,${TEMPTARGET},,<<<"${@}")"
+SNIPARAM=""
+if [ $SNISCAN -gt 0 ]; then 
+	SNIPARAM="-servername ${HOST}"
+fi
+SCLIENTARGS="$SNIPARAM $(sed -e s,${TEMPTARGET},,<<<"${@}")"
 debug "sclientargs: $SCLIENTARGS"
 
 
