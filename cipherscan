@@ -48,7 +48,7 @@ usage: $0 -h|--help
 $0 attempts to connect to a target site using all the ciphersuites it knows.
 
 Original script by Julien Vehent. [:ulfr] - https://github.com/jvehent/cipherscan
-FreeBSD version by Olivier Paroz. [:ulfr] - https://github.com/oparoz/cipherscan
+FreeBSD version by Olivier Paroz - https://github.com/oparoz/cipherscan
 
 On FreeBSD, you will need the following ports on FreeBSD: textproc/gnugrep and sysutils/coreutils
 
