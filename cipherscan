@@ -19,7 +19,7 @@ if [ "${OS}" = "FreeBSD" ]; then
 fi
 OPENSSLBIN="$(dirname $0)/openssl"
 if [ -z "$CACERTS" ]; then
-  for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
+  for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt /usr/local/share/certs/ca-root-nss.crt; do
     if [ -e "$f" ]; then
       CACERTS="$f"
       break
