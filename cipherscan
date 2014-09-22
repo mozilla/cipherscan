@@ -108,8 +108,13 @@ test_cipher_on_target() {
         fi
         # filter out the OCSP server certificate
         tmp=$(awk 'BEGIN { pr="yes" } /^======================================/ { if ( pr=="yes" ) pr="no"; else pr="yes" } { if ( pr == "yes" ) print }' <<<"$tmp")
+        current_certcn=$(grep "subject=" <<<"$tmp"| grep -oP "(?<=CN\=)[^ |\/]+")
+        current_subjaltnames=$(${OPENSSLBIN} x509 -noout -text 2>/dev/null <<<"$tmp"|awk '/X509v3 Subject Alternative Name/ {getline;gsub(/ /, "", $0);print}' | tr -d "DNS:")
         current_cipher=$(grep "New, " <<<"$tmp"|awk '{print $5}')
         current_pfs=$(grep 'Server Temp Key' <<<"$tmp"|awk '{print $4$5$6$7}')
+        if [ -z $current_pfs ]; then
+            current_pfs="None"
+        fi
         current_protocol=$(egrep "^\s+Protocol\s+:" <<<"$tmp"|awk '{print $3}')
         current_pubkey=$(grep 'Server public key is ' <<<"$tmp"|awk '{print $5}')
         if [ -z $current_pubkey ]; then
@@ -147,6 +152,16 @@ test_cipher_on_target() {
         else
             protocols="$protocols,$current_protocol"
         fi
+        certcns="$current_certcn"
+        # Let's add the alternative subject names if they exist
+        if [ -n "$current_subjaltnames" ]; then
+            IFS=',' read -ra subjaltnamesarray <<<"$current_subjaltnames"
+            for altname in "${subjaltnamesarray[@]}"; do
+                if [[ "$altname" !=  "$current_certcn" ]]; then
+                    certcns="$certcns,$altname"
+            fi
+            done
+        fi
         cipher=$current_cipher
         pfs=$current_pfs
         pubkey=$current_pubkey
@@ -165,13 +180,13 @@ test_cipher_on_target() {
 
     # if cipher contains NONE, the cipher wasn't accepted
     elif [ "$cipher" == '(NONE)  ' ]; then
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs"
+        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $certcns"
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
 
     # the connection succeeded
     else
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs"
+        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $certcns"
         verbose "handshake succeeded, server returned ciphersuite '$result'"
         return 0
     fi
@@ -226,6 +241,7 @@ get_cipher_pref() {
 display_results_in_terminal() {
     # Display the results
     ctr=1
+    local certcns
     local pubkey
     local sigalg
     local trusted
@@ -246,6 +262,7 @@ display_results_in_terminal() {
             trusted=$(awk '{print $5}' <<<$cipher)
             tickethint=$(awk '{print $6}' <<<$cipher)
             ocspstaple=$(awk '{print $7}' <<<$cipher)
+            certcns=$(awk '{print $9}' <<<$cipher)
         else
             if [ "$pubkey" != "$(awk '{print $3}' <<<$cipher)" ]; then
                 different=True
@@ -291,11 +308,28 @@ display_results_in_terminal() {
         fi
     done|column -t
     echo
+    
+    matchhostname=0
+    hostcertcn="Not a match"
+    if [ -z "$certcns" ]; then
+        hostcertcn="CN not found"
+    else
+        IFS=',' read -ra certcnsarray <<<"$certcns"
+        for certcn in "${certcnsarray[@]}"; do
+            if [[ "$certcn" ==  "$HOST" ]]; then
+                matchhostname=1
+                hostcertcn="$certcn"
+                break
+        fi
+        done
+        
+        
+    fi
     if [ $different != "True" ]; then
         if [ "$trusted" == "True" ]; then
-            echo "Certificate: trusted, $pubkey bit, $sigalg signature"
+            echo "Certificate: $hostcertcn, trusted, $pubkey bit, $sigalg signature"
         else
-            echo "Certificate: UNTRUSTED, $pubkey bit, $sigalg signature"
+            echo "Certificate: $hostcertcn, UNTRUSTED, $pubkey bit, $sigalg signature"
         fi
         echo "TLS ticket lifetime hint: $tickethint"
     fi
@@ -303,6 +337,13 @@ display_results_in_terminal() {
         echo "OCSP stapling: supported"
     else
         echo "OCSP stapling: not supported"
+    fi
+    if [ $matchhostname -eq 0 ]; then
+        echo "WARNING - None of the CNs match the hostname given"
+    fi
+    if [ -n "$certcns" ]; then
+        echo "Here is the list of common names found in the certificate"
+        echo $certcns
     fi
 }
 
@@ -315,6 +356,7 @@ display_results_in_json() {
         [ $ctr -gt 0 ] && echo -n ','
         echo -n "{\"cipher\":\"$(echo $cipher|awk '{print $1}')\","
         echo -n "\"protocols\":[\"$(echo $cipher|awk '{print $2}'|sed 's/,/","/g')\"],"
+        echo -n "\"certcns\":[\"$(echo $cipher|awk '{print $9}'|sed 's/,/","/g')\"],"
         echo -n "\"pubkey\":[\"$(echo $cipher|awk '{print $3}'|sed 's/,/","/g')\"],"
         echo -n "\"sigalg\":[\"$(echo $cipher|awk '{print $4}'|sed 's/,/","/g')\"],"
         echo -n "\"trusted\":\"$(echo $cipher|awk '{print $5}'|sed 's/,/","/g')\","
