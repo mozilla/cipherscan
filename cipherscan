@@ -22,6 +22,8 @@ fi
 if [ ! -e "$CACERTS" ]; then
     echo "Warning: CA Certificates not found at $CACERTS, export CACERTS variable with location of your trust anchors" 1>&2
 fi
+# RSA ciphers are put at the end to force Google servers to accept ECDSA ciphers
+# (probably a result of a workaround for the bug in Apple implementation of ECDSA)
 CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
 DEBUG=0
 VERBOSE=0
@@ -29,10 +31,19 @@ DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
 TIMEOUT=10
-
+# place where to put the found intermediate CA certificates and where
+# trust anchors are stored
+CAPATH=""
+SAVECRT=""
+unset ok_protocols
+declare -A ok_protocols
+unset known_certs
+declare -A known_certs
+unset cert_checksums
+declare -A cert_checksums
 
 usage() {
-    echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [-d|--delay seconds] [-D|--debug] [-j|--json] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
+    echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [--capath directory] [-d|--delay seconds] [-D|--debug] [-j|--json] [--savecrt directory] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
     usage: $0 -h|--help
 
 $0 attempts to connect to a target site using all the ciphersuites it knows.
@@ -46,11 +57,13 @@ Use one of the options below:
 
 -a | --allciphers   Test all known ciphers individually at the end.
 -b | --benchmark    Activate benchmark mode.
+--capath            use CAs from directory, save intermediate certificates there
 -d | --delay        Pause for n seconds between connections
 -D | --debug        Output ALL the information.
 -h | --help         Shows this help text.
 -j | --json         Output results in JSON format.
 -o | --openssl      path/to/your/openssl binary you want to use.
+--savecrt           path where to save untrusted and leaf certificates
 -v | --verbose      Increase verbosity.
 
 The rest of the arguments will be interpreted as openssl s_client argument.
@@ -74,17 +87,47 @@ debug(){
     fi
 }
 
+c_hash() {
+    local h=$(${OPENSSLBIN} x509 -hash -noout -in "$1/$2" 2>/dev/null)
+    for num in $(seq 0 100); do
+        if [[ $1/${h}.${num} -ef $2 ]]; then
+            # file already linked, ignore
+            break
+        fi
+        if [[ ! -e $1/${h}.${num} ]]; then
+            # file doesn't exist, create a link
+            pushd "$1" > /dev/null
+            ln -s "$2" "${h}.${num}"
+            popd > /dev/null
+            break
+        fi
+    done
+}
+
 # Connect to a target host with the selected ciphersuite
 test_cipher_on_target() {
     local sslcommand=$@
     cipher=""
+    local cmnd=""
     protocols=""
     pfs=""
     previous_cipher=""
+    certificates=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
-        debug echo \"Q\" \| $sslcommand $tls_version
-        local tmp=$(echo "Q" | $sslcommand $tls_version 1>/dev/stdout 2>/dev/null)
+        if [[ ${ok_protocols[$tls_version]} -eq 1 ]]; then
+            continue
+        fi
+        # sslv2 client hello doesn't support SNI extension
+        # in SSLv3 mode OpenSSL just ignores the setting so it's ok
+        # -status exception is ignored in SSLv2, go figure
+        if [ "$tls_version" == "-ssl2" ]; then
+            cmnd=$(sed 's/-servername\ [^ ]*//'<<<$sslcommand)
+        else
+            cmnd=$sslcommand
+        fi
+        debug echo \"Q\" \| $cmnd $tls_version
+        local tmp=$(echo "Q" | $cmnd $tls_version 1>/dev/stdout 2>/dev/null)
         if grep 'OCSP Response Data' <<<"$tmp" >/dev/null; then
             current_ocspstaple="True"
         else
@@ -92,18 +135,23 @@ test_cipher_on_target() {
         fi
         # filter out the OCSP server certificate
         tmp=$(awk 'BEGIN { pr="yes" } /^======================================/ { if ( pr=="yes" ) pr="no"; else pr="yes" } { if ( pr == "yes" ) print }' <<<"$tmp")
-        current_cipher=$(grep "New, " <<<"$tmp"|awk '{print $5}')
-        current_pfs=$(grep 'Server Temp Key' <<<"$tmp"|awk '{print $4$5$6$7}')
-        current_protocol=$(egrep "^\s+Protocol\s+:" <<<"$tmp"|awk '{print $3}')
-        current_pubkey=$(grep 'Server public key is ' <<<"$tmp"|awk '{print $5}')
-        if [ -z $current_pubkey ]; then
-            current_pubkey=0
-        fi
-        current_tickethint=$(grep 'ticket lifetime hint' <<<"$tmp"|awk '{print $6 }')
+
+        # session metadata
+        current_cipher=$(awk '/New, / {print $5; exit}' <<<"$tmp")
+        current_pfs=$(awk '/Server Temp Key/ {print $4$5$6$7; exit}' <<<"$tmp")
+        current_protocol=$(awk '/^\s+Protocol\s+:/ {print $3; exit}' <<<"$tmp")
+        current_tickethint=$(awk '/ticket lifetime hint/ {print $6; exit}' <<<"$tmp")
         if [ -z $current_tickethint ]; then
             current_tickethint=None
         fi
-        current_sigalg=$(${OPENSSLBIN} x509 -noout -text 2>/dev/null <<<"$tmp"|grep Signature\ Algorithm | head -n 1 | awk '{print $3}') || current_sigalg="None"
+
+        # certificate metadata
+        current_pubkey=$(awk '/Server public key is / {print $5;exit}' <<<"$tmp")
+        if [ -z $current_pubkey ]; then
+            current_pubkey=0
+        fi
+        current_sigalg=$(${OPENSSLBIN} x509 -noout -text 2>/dev/null <<<"$tmp"|\
+            awk '/Signature Algorithm/ {print $3; exit}') || current_sigalg="None"
         grep 'Verify return code: 0 ' <<<"$tmp" >/dev/null
         if [ $? -eq 0 ]; then
             current_trusted="True"
@@ -113,7 +161,88 @@ test_cipher_on_target() {
         if [ -z $current_sigalg ]; then
             current_sigalg=None
         fi
+
+        # collect certificate data
+        current_certificates=""
+        local certificate_count=$(grep --count -- '-----END CERTIFICATE-----'\
+            <<<"$tmp")
+        debug "server presented $certificate_count certificates"
+        local i
+        for ((i=0; i<$certificate_count; i=i+1 )); do
+
+            # extract i'th certificate
+            local cert=$(awk -v i=$i 'BEGIN { output=0;n=0 }
+            /-----BEGIN CERTIFICATE-----/ { output=1 }
+            output==1 { if (n==i) print }
+            /-----END CERTIFICATE-----/ { output=0; n++ }' <<<"$tmp")
+            # put the output to an array instead running awk '{print $1}'
+            local cksum=($(cksum <<<"$cert"))
+            # compare the values not just checksums so that eventual collision
+            # doesn't mess up results
+            if [[ ${known_certs[$cksum]} == $cert ]]; then
+                if [ -n "${current_certificates}" ]; then
+                    current_certificates+=","
+                fi
+                current_certificates+="\"${cert_checksums[$cksum]}\""
+                continue
+            fi
+
+            # compute sha256 fingerprint of the certificate
+            local sha256sum=$(${OPENSSLBIN} x509 -outform DER\
+                <<<"$cert" 2>/dev/null |\
+                ${OPENSSLBIN} dgst -sha256 -r 2>/dev/null| awk '{print $1}')
+
+            # check if it is a CA certificate
+            local isCA="False"
+            if ${OPENSSLBIN} x509 -noout -text <<<"$cert" 2>/dev/null |\
+                grep 'CA:TRUE' >/dev/null; then
+                isCA="True"
+            fi
+
+            # build trust source for certificate verification
+            local trust_source=()
+            if [[ -n $CAPATH ]]; then
+                trust_source=("-CApath" "$CAPATH")
+            elif [[ -e $CACERTS ]]; then
+                trust_source=("-CAfile" "$CACERTS")
+            fi
+
+            # check if the certificate is actually trusted (server may present
+            # unrelated certificates that are not trusted (including self
+            # signed ones)
+            local saved="False"
+            if ${OPENSSLBIN} verify "${trust_source[@]}" \
+                -untrusted <(echo "$tmp") <(echo "$cert") 2>/dev/null | \
+                grep ': OK$' >/dev/null; then
+
+                # if the certificate is an intermediate CA it may be useful
+                # for connecting to servers that are misconfigured so save it
+                if [[ -n $CAPATH ]] && [[ $isCA == "True" ]]; then
+                    if [[ ! -e "$CAPATH/${sha256sum}.pem" ]]; then
+                        echo "$cert" > "$CAPATH/${sha256sum}.pem"
+                        c_hash "$CAPATH" "${sha256sum}.pem"
+                    fi
+                    saved="True"
+                fi
+            fi
+            if [[ -n $SAVECRT ]] && [[ $saved == "False" ]]; then
+                if [[ ! -e $SAVECRT/${sha256sum}.pem ]]; then
+                    echo "$cert" > "$SAVECRT/${sha256sum}.pem"
+                fi
+            fi
+            # save the sha sum for reporting
+            if [ -n "${current_certificates}" ]; then
+                current_certificates+=","
+            fi
+            current_certificates+="\"${sha256sum}\""
+            known_certs[$cksum]="$cert"
+            cert_checksums[$cksum]="$sha256sum"
+        done
+        debug "current_certificates: $current_certificates"
+
+        # parsing finished, report result
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
+            ok_protocols["$tls_version"]=1
             # connection failed, try again with next TLS version
             continue
         else
@@ -138,6 +267,7 @@ test_cipher_on_target() {
         trusted=$current_trusted
         tickethint=$current_tickethint
         ocspstaple=$current_ocspstaple
+        certificates="$current_certificates"
         # grab the cipher and PFS key size
     done
     # if cipher is empty, that means none of the TLS version worked with
@@ -182,24 +312,28 @@ bench_cipher() {
     cipherbenchms="$((t/1000/$BENCHMARKITER))"
 }
 
-
 # Connect to the target and retrieve the chosen cipher
 # recursively until the connection fails
 get_cipher_pref() {
     [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
     local ciphersuite="$1"
-    if [ -e $CACERTS ]; then
-        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -CAfile $CACERTS -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
-    else
-        local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+
+    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client"
+    if [ -n "$CAPATH" ]; then
+        sslcommand+=" -CApath $CAPATH -showcerts"
+    elif [ -e $CACERTS ]; then
+        sslcommand+=" -CAfile $CACERTS"
     fi
+    sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     test_cipher_on_target "$sslcommand"
     local success=$?
     # If the connection succeeded with the current cipher, benchmark and store
     if [ $success -eq 0 ]; then
         cipherspref=("${cipherspref[@]}" "$result")
-        pciph=$(echo $result|awk '{print $1}')
+        ciphercertificates=("${ciphercertificates[@]}" "$certificates")
+        pciph=($(echo $result))
         get_cipher_pref "!$pciph:$ciphersuite"
         return 0
     fi
@@ -217,7 +351,7 @@ display_results_in_terminal() {
     local ocspstaple
     local different=False
     for cipher in "${cipherspref[@]}"; do
-        pciph=$(echo $cipher|awk '{print $1}')
+        pciph=($(echo $cipher))
         if [ $DOBENCHMARK -eq 1 ]; then
             bench_cipher "$pciph"
             r="$ctr $cipher $cipherbenchms"
@@ -250,13 +384,13 @@ display_results_in_terminal() {
 
     if [ $DOBENCHMARK -eq 1 ]; then
         if [ $different == "True" ]; then
-            header="prio ciphersuite protocols pubkey_size signature_algoritm trusted ticket_hint pfs_keysize avg_handshake_microsec"
+            header="prio ciphersuite protocols pubkey_size signature_algoritm trusted ticket_hint ocsp_staple pfs_keysize avg_handshake_microsec"
         else
             header="prio ciphersuite protocols pfs_keysize avg_handshake_microsec"
         fi
     else
         if [ $different == "True" ]; then
-            header="prio ciphersuite protocols pubkey_size signature_algorithm trusted ticket_hint pfs_keysize"
+            header="prio ciphersuite protocols pubkey_size signature_algorithm trusted ticket_hint ocsp_staple pfs_keysize"
         else
             header="prio ciphersuite protocols pfs_keysize"
         fi
@@ -268,10 +402,14 @@ display_results_in_terminal() {
             ctr=$((ctr+1))
         fi
         if [ $different == "True" ]; then
-            echo $result|grep -v '(NONE)'
+            if [[ $(awk '{print $3}' <<< $result) == "SSLv3,TLSv1,TLSv1.1,TLSv1.2" ]]; then
+                awk '!/(NONE)/{print $1 " " $2 " " "SSLv3-TLSv1.2" " " $4 " " $5 " " $6 " " $7 " " $8 " " $9}' <<<"$result"
+            else
+                echo $result|grep -v '(NONE)'
+            fi
         else
             # prints priority, ciphersuite, protocols and pfs_keysize
-            echo $result|grep -v '(NONE)'|awk '{print $1 " " $2 " " $3 " " $9}'
+            awk '!/(NONE)/{print $1 " " $2 " " $3 " " $9}' <<<"$result"
         fi
     done|column -t
     echo
@@ -288,13 +426,18 @@ display_results_in_terminal() {
     else
         echo "OCSP stapling: not supported"
     fi
+    if [[ $serverside == "True" ]]; then
+        echo "Server side cipher ordering"
+    else
+        echo "Client side cipher ordering"
+    fi
 }
 
 
 display_results_in_json() {
     # Display the results in json
     ctr=0
-    echo -n "{\"target\":\"$TARGET\",\"date\":\"$(date -R)\",\"ciphersuite\": ["
+    echo -n "{\"target\":\"$TARGET\",\"date\":\"$(date -R)\",\"serverside\":\"${serverside}\",\"ciphersuite\": ["
     for cipher in "${cipherspref[@]}"; do
         [ $ctr -gt 0 ] && echo -n ','
         echo -n "{\"cipher\":\"$(echo $cipher|awk '{print $1}')\","
@@ -302,6 +445,9 @@ display_results_in_json() {
         echo -n "\"pubkey\":[\"$(echo $cipher|awk '{print $3}'|sed 's/,/","/g')\"],"
         echo -n "\"sigalg\":[\"$(echo $cipher|awk '{print $4}'|sed 's/,/","/g')\"],"
         echo -n "\"trusted\":\"$(echo $cipher|awk '{print $5}'|sed 's/,/","/g')\","
+        if [[ -n $CAPATH ]]; then
+            echo -n "\"certificates\":[${ciphercertificates[$ctr]}],"
+        fi
         echo -n "\"ticket_hint\":\"$(echo $cipher|awk '{print $6}')\","
         echo -n "\"ocsp_stapling\":\"$(echo $cipher|awk '{print $7}')\","
         pfs=$(echo $cipher|awk '{print $8}')
@@ -310,6 +456,60 @@ display_results_in_json() {
         ctr=$((ctr+1))
     done
     echo ']}'
+}
+
+test_serverside_ordering() {
+
+    local ciphersuite=""
+    local prefered=""
+    # server supports only one cipher or no ciphers, so it effectively uses server side ordering...
+    if [[ ${#cipherspref[@]} -lt 2 ]]; then
+        serverside="True"
+        return 0
+    # server supports just two ciphers, so rotate them, that should be enough
+    elif [[ ${#cipherspref[@]} -eq 2 ]]; then
+
+        local cipher=$(awk '{print $1}' <<< ${cipherspref[1]})
+        prefered="$cipher"
+        ciphersuite=$cipher
+
+        cipher=$(awk '{print $1}' <<< ${cipherspref[0]})
+        ciphersuite+=":$cipher"
+
+    # server supports 3 or more ciphers, rotate all three. This is necessary because google does
+    # select first client provided cipher, if it is either CDHE-RSA-AES128-GCM-SHA256 or
+    # ECDHE-RSA-CHACHA20-POLY1305
+    else
+        local cipher=$(awk '{print $1}' <<< ${cipherspref[2]})
+        prefered="$cipher"
+        ciphersuite="$cipher"
+
+        cipher=$(awk '{print $1}' <<< ${cipherspref[1]})
+        ciphersuite+=":$cipher"
+
+        cipher=$(awk '{print $1}' <<< ${cipherspref[0]})
+        ciphersuite+=":$cipher"
+    fi
+
+    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client"
+    if [ -n "$CAPATH" ]; then
+        sslcommand+=" -CApath $CAPATH -showcerts"
+    elif [ -e "$CACERTS" ]; then
+        sslcommand+=" -CAfile $CACERTS"
+    fi
+    sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+
+    test_cipher_on_target "$sslcommand"
+    if [ $? -ne 0 ]; then
+        serverside="True"
+    else
+        local selected=$(awk '{print $1}' <<< $result)
+        if [[ $selected == $prefered ]]; then
+            serverside="False"
+        else
+            serverside="True"
+        fi
+    fi
 }
 
 # UNKNOWNOPTIONS=""
@@ -347,6 +547,14 @@ do
             ;;
         -d | --delay)
             DELAY=$2
+            shift 2
+            ;;
+        --capath)
+            CAPATH="$2"
+            shift 2
+            ;;
+        --savecrt)
+            SAVECRT="$2"
             shift 2
             ;;
         --) # End of all options
@@ -393,10 +601,15 @@ debug "sclientargs: $SCLIENTARGS"
 
 
 cipherspref=();
+ciphercertificates=()
 results=()
 
 # Call to the recursive loop that retrieves the cipher preferences
 get_cipher_pref $CIPHERSUITE
+unset ok_protocols
+declare -A ok_protocols
+
+test_serverside_ordering
 
 if [ "$OUTPUTFORMAT" == "json" ]; then
     display_results_in_json

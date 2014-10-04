@@ -2,20 +2,44 @@
 parallel=10
 max_bg=50
 absolute_max_bg=100
-max_load=50
+max_load_avg=50
 
 if [ $(ulimit -u) -lt $((10*absolute_max_bg)) ]; then
     echo "max user processes too low, use ulimit -u to increase"
     exit 1
 fi
 [ ! -e "results" ] && mkdir results
+[ ! -e "certs" ] && mkdir certs
+if [ ! -e "ca_files" ]; then
+    mkdir ca_files
+    pushd ca_files >/dev/null
+    awk '
+      split_after == 1 {n++;split_after=0}
+      /-----END CERTIFICATE-----/ {split_after=1}
+      {print > "cert" n ".pem"}' < "/etc/pki/tls/certs/ca-bundle.crt"
+    for i in *; do
+        h=$(../../openssl x509 -hash -noout -in "$i" 2>/dev/null)
+        for num in `seq 0 100`; do
+            if [[ $h.$num -ef $i ]]; then
+                # file already linked, ignore
+                break
+            fi
+            if [[ ! -e $h.$num ]]; then
+                # file doesn't exist, create a link
+                ln -s "$i" "$h.$num"
+                break
+            fi
+        done
+    done
+    popd >/dev/null
+fi
 
 function wait_for_jobs() {
     local no_jobs
     no_jobs=$(jobs | wc -l)
 
-    while [ $no_jobs -gt $1 ] || awk -v maxload=$max_load '{ if ($1 < maxload) exit 1 }' /proc/loadavg; do
-        if awk -v maxload=$max_load '{ if ($1 > maxload) exit 1 }' /proc/loadavg && [ $no_jobs -lt $absolute_max_bg ]; then
+    while [ $no_jobs -gt $1 ] || awk -v maxload=$max_load_avg '{ if ($1 < maxload) exit 1 }' /proc/loadavg; do
+        if awk -v maxload=$max_load_avg '{ if ($1 > maxload) exit 1 }' /proc/loadavg && [ $no_jobs -lt $absolute_max_bg ]; then
             return
         fi
         sleep 1
@@ -32,7 +56,7 @@ function scan_host() {
     if [ $? -gt 0 ]; then
         return
     fi
-    ../cipherscan -json -servername $1 $2:443 > results/$1@$2
+    ../cipherscan --capath ca_files --savecrt certs -json -servername $1 $2:443 > results/$1@$2
 }
 
 function scan_host_no_sni() {
@@ -44,10 +68,12 @@ function scan_host_no_sni() {
     if [ $? -gt 0 ]; then
         return
     fi
-    ../cipherscan -json $1:443 > results/$1
+    ../cipherscan --capath ca_files --savecrt certs -json $1:443 > results/$1
 }
 
 function scan_hostname() {
+    # check if the hostname isn't an IP address (since we can't put IP
+    # addresses to SNI extension)
     if [[ ! -z $(awk -F. '$1>=0 && $1<=255 && $2>=0 && $2<=255 &&
         $3>=0 && $3<=255 && $4>=0 && $4<=255 && NF==4' <<<"$1") ]]; then
         scan_host_no_sni $1

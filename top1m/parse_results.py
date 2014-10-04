@@ -14,10 +14,47 @@ import json
 import sys
 from collections import defaultdict
 import os
+import re
+
+def natural_sort(l):
+    convert = lambda text: int(text) if text.isdigit() else text.lower()
+    alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ]
+    return sorted(l, key = alphanum_key)
+
+""" list of ciphers offerred by Firefox 29 by default """
+firefox_ciphers=[
+        'ECDHE-ECDSA-AES128-GCM-SHA256',
+        'ECDHE-RSA-AES128-GCM-SHA256',
+        'ECDHE-ECDSA-AES256-SHA',
+        'ECDHE-ECDSA-AES128-SHA',
+        'ECDHE-RSA-AES128-SHA',
+        'ECDHE-RSA-AES256-SHA',
+        'ECDHE-RSA-DES-CBC3-SHA',
+        'ECDHE-ECDSA-RC4-SHA',
+        'ECDHE-RSA-RC4-SHA',
+        'DHE-RSA-AES128-SHA',
+        'DHE-DSS-AES128-SHA',
+        'DHE-RSA-CAMELLIA128-SHA',
+        'DHE-RSA-AES256-SHA',
+        'DHE-DSS-AES256-SHA',
+        'DHE-RSA-CAMELLIA256-SHA',
+        'EDH-RSA-DES-CBC3-SHA',
+        'AES128-SHA',
+        'CAMELLIA128-SHA',
+        'AES256-SHA',
+        'CAMELLIA256-SHA',
+        'DES-CBC3-SHA',
+        'RC4-SHA',
+        'RC4-MD5']
 
 report_untrused=False
 
 cipherstats = defaultdict(int)
+FF_RC4_Only_cipherstats = defaultdict(int)
+FF_RC4_preferred_cipherstats = defaultdict(int)
+FF_incompatible_cipherstats = defaultdict(int)
+FF_selected_cipherstats = defaultdict(int)
+cipherordering = defaultdict(int)
 pfsstats = defaultdict(int)
 protocolstats = defaultdict(int)
 handshakestats = defaultdict(int)
@@ -38,6 +75,7 @@ for r,d,flist in os.walk(path):
         tempdsakeystats = {}
         tempsigstats = {}
         tempticketstats = {}
+        """ supported ciphers by the server under scan """
         tempcipherstats = {}
         ciphertypes = 0
         AESGCM = False
@@ -46,6 +84,13 @@ for r,d,flist in os.walk(path):
         DES3 = False
         CAMELLIA = False
         RC4 = False
+        """ the following depends on FF_compat, so by default it can be True """
+        RC4_Only_FF = True
+        FF_compat = False
+        temp_FF_incompat = {}
+        list_of_ciphers = []
+        FF_RC4_Pref = None
+        FF_selected = None
         ADH = False
         DHE = False
         AECDH = False
@@ -85,11 +130,25 @@ for r,d,flist in os.walk(path):
                 if 'False' in entry['trusted'] and report_untrused == False:
                     continue
 
+                list_of_ciphers.append(entry['cipher'])
+
+                # check if the advertised ciphers are not effectively RC4 Only
+                # for firefox or incompatible with firefox
+                if entry['cipher'] in firefox_ciphers:
+                    # if this is first cipher and we already are getting RC4
+                    # then it means that RC4 is preferred
+                    FF_compat = True
+                    if not 'RC4' in entry['cipher']:
+                        RC4_Only_FF = False
+                else:
+                    temp_FF_incompat[entry['cipher']] = 1
+
                 """ store the ciphers supported """
                 if 'ADH' in entry['cipher'] or 'AECDH' in entry['cipher']:
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
                     tempcipherstats[name] = 1
+                    tempcipherstats['Insecure'] = 1
                 elif 'AES128-GCM' in entry['cipher'] or 'AES256-GCM' in entry['cipher']:
                     if not AESGCM:
                         AESGCM = True
@@ -114,10 +173,15 @@ for r,d,flist in os.walk(path):
                     if not CHACHA20:
                         ciphertypes += 1
                         CHACHA20 = True
+                elif 'IDEA' in entry['cipher'] or 'SEED' in entry['cipher']:
+                    ciphertypes += 1
+                    name = "y:" + entry['cipher']
+                    tempcipherstats[name] = 1
                 else:
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
                     tempcipherstats[name] = 1
+                    tempcipherstats['Insecure'] = 1
 
                 """ store key handshake methods """
                 if 'ECDHE' in entry['cipher']:
@@ -138,7 +202,7 @@ for r,d,flist in os.walk(path):
                     RSA = True
 
                 """ save the key size """
-                if 'ECDSA' in entry['cipher']:
+                if 'ECDSA' in entry['cipher'] or 'ECDH-RSA' in entry['cipher']:
                     ECDSA = True
                     tempecckeystats[entry['pubkey'][0]] = 1
                 elif 'DSS' in entry['cipher']:
@@ -206,6 +270,32 @@ for r,d,flist in os.walk(path):
         if dualstack:
             dsarsastack += 1
 
+        """ save cipher ordering """
+        if 'serverside' in results:
+            if results['serverside'] == "False":
+                cipherordering['Client side'] += 1
+            else:
+                cipherordering['Server side'] += 1
+        else:
+            cipherordering['Unknown'] += 1
+
+        """ simulate handshake with Firefox """
+        if FF_compat:
+            if 'serverside' in results and results['serverside'] == "False":
+                for cipher in firefox_ciphers:
+                    if cipher in list_of_ciphers:
+                        FF_selected = cipher
+                        if 'RC4' in cipher:
+                            FF_RC4_Pref = True
+                        break
+            else:
+                for cipher in list_of_ciphers:
+                    if cipher in firefox_ciphers:
+                        FF_selected = cipher
+                        if 'RC4' in cipher:
+                            FF_RC4_Pref = True
+                        break
+
         for s in tempsigstats:
             sigalg[s] += 1
 
@@ -255,6 +345,27 @@ for r,d,flist in os.walk(path):
                    'TLSv1.2' in results['ciphersuite'][0]['protocols']:
                         cipherstats['RC4 forced in TLS1.1+'] += 1
                 cipherstats['RC4 Preferred'] += 1
+
+        if FF_compat:
+            if 'ECDHE' in FF_selected:
+                FF_selected_cipherstats['x:ECDHE'] += 1
+            elif 'DHE' in FF_selected or 'EDH' in FF_selected:
+                FF_selected_cipherstats['x:DHE'] += 1
+            else:
+                FF_selected_cipherstats['x:kRSA'] += 1
+            FF_selected_cipherstats[FF_selected] += 1
+            if RC4_Only_FF and ciphertypes != 1:
+                cipherstats['x:FF 29 RC4 Only'] += 1
+                for cipher in temp_FF_incompat:
+                    FF_RC4_Only_cipherstats[cipher] += 1
+            if FF_RC4_Pref and not 'RC4' in results['ciphersuite'][0]['cipher']:
+                cipherstats['x:FF 29 RC4 Preferred'] += 1
+                for cipher in temp_FF_incompat:
+                    FF_RC4_preferred_cipherstats[cipher] += 1
+        else:
+            cipherstats['x:FF 29 incompatible'] += 1
+            for cipher in temp_FF_incompat:
+                FF_incompatible_cipherstats[cipher] += 1
 
         for cipher in tempcipherstats:
             cipherstats[cipher] += 1
@@ -309,6 +420,13 @@ for r,d,flist in os.walk(path):
     #if total % 1999 == 0:
     #    break
 
+""" The 'x:FF 29 RC4 Preferred' counts only sites that effectively prefer
+    RC4 when using FF, to make reporting more readable, sum it with sites
+    that do that for all ciphers"""
+
+if "x:FF 29 RC4 Preferred" in cipherstats and "RC4 Preferred" in cipherstats:
+    cipherstats['x:FF 29 RC4 Preferred'] += cipherstats['RC4 Preferred']
+
 print("SSL/TLS survey of %i websites from Alexa's top 1 million" % total)
 if report_untrused == False:
     print("Stats only from connections that did provide valid certificates")
@@ -320,6 +438,36 @@ print("-------------------------+---------+-------")
 for stat in sorted(cipherstats):
     percent = round(cipherstats[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+print("\nCipher ordering           Count     Percent")
+print("-------------------------+---------+-------")
+for stat in sorted(cipherordering):
+    percent = round(cipherordering[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(cipherordering[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+print("\nFF 29 selected ciphers        Count    Percent")
+print("-----------------------------+---------+------")
+for stat in sorted(FF_selected_cipherstats):
+    percent = round(FF_selected_cipherstats[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(30) + " " + str(FF_selected_cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+print("\nFF 29 RC4 Only other ciphers  Count    Percent")
+print("-----------------------------+---------+------")
+for stat in sorted(FF_RC4_Only_cipherstats):
+    percent = round(FF_RC4_Only_cipherstats[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(30) + " " + str(FF_RC4_Only_cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+print("\nFF 29 RC4 pref other ciphers  Count    Percent")
+print("-----------------------------+---------+------")
+for stat in sorted(FF_RC4_preferred_cipherstats):
+    percent = round(FF_RC4_preferred_cipherstats[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(30) + " " + str(FF_RC4_preferred_cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+print("\nFF 29 incompatible ciphers    Count    Percent")
+print("-----------------------------+---------+------")
+for stat in sorted(FF_incompatible_cipherstats):
+    percent = round(FF_incompatible_cipherstats[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(30) + " " + str(FF_incompatible_cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
 
 print("\nSupported Handshakes      Count     Percent")
 print("-------------------------+---------+-------")
@@ -340,7 +488,7 @@ for stat in sorted(pfsstats):
 
 print("\nTLS session ticket hint   Count     Percent ")
 print("-------------------------+---------+--------")
-for stat in sorted(tickethint):
+for stat in natural_sort(tickethint):
     percent = round(tickethint[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(tickethint[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
