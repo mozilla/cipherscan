@@ -22,6 +22,8 @@ fi
 if [ ! -e "$CACERTS" ]; then
     echo "Warning: CA Certificates not found at $CACERTS, export CACERTS variable with location of your trust anchors" 1>&2
 fi
+# RSA ciphers are put at the end to force Google servers to accept ECDSA ciphers
+# (probably a result of a workaround for the bug in Apple implementation of ECDSA)
 CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
 DEBUG=0
 VERBOSE=0

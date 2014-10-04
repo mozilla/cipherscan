@@ -2,7 +2,7 @@
 parallel=10
 max_bg=50
 absolute_max_bg=100
-max_load=50
+max_load_avg=50
 
 if [ $(ulimit -u) -lt $((10*absolute_max_bg)) ]; then
     echo "max user processes too low, use ulimit -u to increase"
@@ -38,8 +38,8 @@ function wait_for_jobs() {
     local no_jobs
     no_jobs=$(jobs | wc -l)
 
-    while [ $no_jobs -gt $1 ] || awk -v maxload=$max_load '{ if ($1 < maxload) exit 1 }' /proc/loadavg; do
-        if awk -v maxload=$max_load '{ if ($1 > maxload) exit 1 }' /proc/loadavg && [ $no_jobs -lt $absolute_max_bg ]; then
+    while [ $no_jobs -gt $1 ] || awk -v maxload=$max_load_avg '{ if ($1 < maxload) exit 1 }' /proc/loadavg; do
+        if awk -v maxload=$max_load_avg '{ if ($1 > maxload) exit 1 }' /proc/loadavg && [ $no_jobs -lt $absolute_max_bg ]; then
             return
         fi
         sleep 1
@@ -72,6 +72,8 @@ function scan_host_no_sni() {
 }
 
 function scan_hostname() {
+    # check if the hostname isn't an IP address (since we can't put IP
+    # addresses to SNI extension)
     if [[ ! -z $(awk -F. '$1>=0 && $1<=255 && $2>=0 && $2<=255 &&
         $3>=0 && $3<=255 && $4>=0 && $4<=255 && NF==4' <<<"$1") ]]; then
         scan_host_no_sni $1

@@ -75,6 +75,7 @@ for r,d,flist in os.walk(path):
         tempdsakeystats = {}
         tempsigstats = {}
         tempticketstats = {}
+        """ supported ciphers by the server under scan """
         tempcipherstats = {}
         ciphertypes = 0
         AESGCM = False
