@@ -85,7 +85,9 @@ def rsa_key_size_to_los(size):
         return 256
 
 def sig_alg_to_los(name):
-    if 'SHA1' in name.upper():
+    if 'MD5' in name.upper():
+        return 64
+    elif 'SHA1' in name.upper():
         return 80
     elif 'SHA224' in name.upper():
         return 112
