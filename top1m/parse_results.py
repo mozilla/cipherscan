@@ -147,6 +147,7 @@ for r,d,flist in os.walk(path):
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
                     tempcipherstats[name] = 1
+                    tempcipherstats['Insecure'] = 1
                 elif 'AES128-GCM' in entry['cipher'] or 'AES256-GCM' in entry['cipher']:
                     if not AESGCM:
                         AESGCM = True
@@ -171,10 +172,15 @@ for r,d,flist in os.walk(path):
                     if not CHACHA20:
                         ciphertypes += 1
                         CHACHA20 = True
+                elif 'IDEA' in entry['cipher'] or 'SEED' in entry['cipher']:
+                    ciphertypes += 1
+                    name = "y:" + entry['cipher']
+                    tempcipherstats[name] = 1
                 else:
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
                     tempcipherstats[name] = 1
+                    tempcipherstats['Insecure'] = 1
 
                 """ store key handshake methods """
                 if 'ECDHE' in entry['cipher']:
