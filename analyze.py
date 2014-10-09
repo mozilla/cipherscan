@@ -72,10 +72,6 @@ def is_old(results):
                 has_dhparam = False
         if conn['ocsp_stapling'] == 'False':
             has_ocsp = False
-    missing_ciphers = set(old_ciphers) - set(all_ciphers)
-    for cipher in missing_ciphers:
-        logging.debug("missing cipher " + cipher + " wanted in the " + lvl + " configuration")
-        failures[lvl].append('add cipher ' + cipher)
     extra_proto = set(all_proto) - set(['SSLv3', 'TLSv1', 'TLSv1.1', 'TLSv1.2'])
     for proto in extra_proto:
         logging.debug("found protocol not wanted in the old configuration:" + proto)
@@ -301,18 +297,20 @@ def build_ciphers_lists():
               '384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AE' \
               'S128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-' \
               'AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK'
+    blackhole = open(os.devnull, 'w')
     logging.debug('Loading all ciphers: ' + allC)
-    all_ciphers = subprocess.check_output(
-        ['./openssl', 'ciphers', allC]).rstrip().split(':')
+    all_ciphers = subprocess.Popen(['./openssl', 'ciphers', allC],
+        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading old ciphers: ' + oldC)
-    old_ciphers = subprocess.check_output(
-        ['./openssl', 'ciphers', oldC]).rstrip().split(':')
+    old_ciphers = subprocess.Popen(['./openssl', 'ciphers', oldC],
+        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading intermediate ciphers: ' + intC)
-    intermediate_ciphers = subprocess.check_output(
-        ['./openssl', 'ciphers', intC]).rstrip().split(':')
+    intermediate_ciphers = subprocess.Popen(['./openssl', 'ciphers', intC],
+        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading modern ciphers: ' + modernC)
-    modern_ciphers = subprocess.check_output(
-        ['./openssl', 'ciphers', modernC]).rstrip().split(':')
+    modern_ciphers = subprocess.Popen(['./openssl', 'ciphers', modernC],
+        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
+    blackhole.close()
 
 def main():
     parser = argparse.ArgumentParser(
