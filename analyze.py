@@ -80,7 +80,7 @@ def is_old(results):
     missing_proto = set(['SSLv3', 'TLSv1', 'TLSv1.1', 'TLSv1.2']) - set(all_proto)
     for proto in missing_proto:
         logging.debug("missing protocol wanted in the old configuration:" + proto)
-        failures[lvl].append('enable ' + proto)
+        failures[lvl].append('consider enabling ' + proto)
     if not has_sslv3:
         logging.debug("SSLv3 is not supported and required by the old configuration")
         old = False
@@ -95,7 +95,7 @@ def is_old(results):
         failures[lvl].append("use a DH parameter of 1024 bits")
         old = False
     if not has_ocsp:
-        failures[lvl].append("enable OCSP Stapling")
+        failures[lvl].append("consider enabling OCSP Stapling")
     return old
 
 # is_intermediate is similar to is_old but for intermediate configuration from
@@ -140,7 +140,7 @@ def is_intermediate(results):
     missing_proto = set(['TLSv1', 'TLSv1.1', 'TLSv1.2']) - set(all_proto)
     for proto in missing_proto:
         logging.debug("missing protocol wanted in the intermediate configuration:" + proto)
-        failures[lvl].append('enable ' + proto)
+        failures[lvl].append('consider enabling ' + proto)
     if not has_tls1:
         logging.debug("TLSv1 is not supported and required by the old configuration")
         inter = False
@@ -155,7 +155,7 @@ def is_intermediate(results):
         failures[lvl].append("use a DH parameter of 2048 bits")
         inter = False
     if not has_ocsp:
-        failures[lvl].append("enable OCSP Stapling")
+        failures[lvl].append("consider enabling OCSP Stapling")
     return inter
 
 # is_modern is similar to is_old but for modern configuration from
@@ -194,7 +194,7 @@ def is_modern(results):
     missing_proto = set(['TLSv1.1', 'TLSv1.2']) - set(all_proto)
     for proto in missing_proto:
         logging.debug("missing protocol wanted in the modern configuration:" + proto)
-        failures[lvl].append('enable ' + proto)
+        failures[lvl].append('consider enabling ' + proto)
     if not has_sha256:
         failures[lvl].append("use a certificate with sha256WithRSAEncryption signature")
         modern = False
@@ -202,7 +202,7 @@ def is_modern(results):
         failures[lvl].append("use a DH parameter of 2048 bits")
         modern = False
     if not has_ocsp:
-        failures[lvl].append("enable OCSP Stapling")
+        failures[lvl].append("consider enabling OCSP Stapling")
     return modern
 
 def is_ordered(results, ciphersuite):
@@ -233,7 +233,7 @@ def evaluate_all(results):
             status = "old ssl with bad ordering"
 
     if is_fubar(results):
-        return "fubar ssl"
+        return "bad ssl"
 
     return status
 
