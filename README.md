@@ -218,6 +218,46 @@ $ /cipherscan -j -starttls xmpp jabber.ccc.de:5222
 }
 ```
 
+Analyzing configurations
+------------------------
+The motivation behind cipherscan is to help admins configure good TLS on their
+endpoints. To help this further, the script `analyze.py` compares the results of
+a cipherscan with the TLS guidelines from https://wiki.mozilla.org/Security/Server_Side_TLS
+and output a level and recommendations.
+
+```bash
+$ ./analyze.py -t jve.linuxwall.info
+jve.linuxwall.info:443 has intermediate tls
+
+Failed to pass old level. The following items are failing:
+* consider enabling SSLv3
+* add cipher DES-CBC3-SHA
+* use a certificate with sha1WithRSAEncryption signature
+* consider enabling OCSP Stapling
+
+Failed to pass intermediate level. The following items are failing:
+* consider enabling OCSP Stapling
+
+Failed to pass modern level. The following items are failing:
+* remove cipher AES128-GCM-SHA256
+* remove cipher AES256-GCM-SHA384
+* remove cipher AES128-SHA256
+* remove cipher AES128-SHA
+* remove cipher AES256-SHA256
+* remove cipher AES256-SHA
+* disable TLSv1
+* consider enabling OCSP Stapling
+```
+In the output above, `analyze.py` indicates that the target `jve.linuxwall.info`
+matches the intermediate configuration level. If the administrator of this site
+wants to reach the modern level, the items that failed under the modern tests
+should be corrected.
+
+`analyze.py` does not make any assumption on what a good level should be. Sites
+operators should now what level they want to match against, based on the
+compatibility level they want to support. Again, refer to
+https://wiki.mozilla.org/Security/Server_Side_TLS for more information.
+
 Contributors
 ------------
 
