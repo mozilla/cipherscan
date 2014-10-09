@@ -229,16 +229,16 @@ and output a level and recommendations.
 $ ./analyze.py -t jve.linuxwall.info
 jve.linuxwall.info:443 has intermediate tls
 
-Failed to pass old level. The following items are failing:
+Changes needed to match the old level:
 * consider enabling SSLv3
 * add cipher DES-CBC3-SHA
 * use a certificate with sha1WithRSAEncryption signature
 * consider enabling OCSP Stapling
 
-Failed to pass intermediate level. The following items are failing:
+Changes needed to match the intermediate level:
 * consider enabling OCSP Stapling
 
-Failed to pass modern level. The following items are failing:
+Changes needed to match the modern level:
 * remove cipher AES128-GCM-SHA256
 * remove cipher AES256-GCM-SHA384
 * remove cipher AES128-SHA256
@@ -248,6 +248,7 @@ Failed to pass modern level. The following items are failing:
 * disable TLSv1
 * consider enabling OCSP Stapling
 ```
+
 In the output above, `analyze.py` indicates that the target `jve.linuxwall.info`
 matches the intermediate configuration level. If the administrator of this site
 wants to reach the modern level, the items that failed under the modern tests

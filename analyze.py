@@ -258,13 +258,13 @@ def process_results(data, level=None):
     # print failures
     if level:
         if len(failures[level]) > 0:
-            print("\nFailed to pass " + level + " level. The following items are failing:")
+            print("\nChanges needed to match the " + level + " level:")
             for failure in failures[level]:
                 print("* " + failure)
     else:
         for lvl in ['old', 'intermediate', 'modern']:
            if len(failures[lvl]) > 0:
-                print("\nFailed to pass " + lvl + " level. The following items are failing:")
+                print("\nChanges needed to match the " + lvl + " level:")
                 for failure in failures[lvl]:
                     print("* " + failure)
 
