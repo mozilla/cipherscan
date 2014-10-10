@@ -5,7 +5,7 @@
 #
 # Contributor: Julien Vehent jvehent@mozilla.com [:ulfr]
 
-import sys, os, json, subprocess, logging, argparse
+import sys, os, json, subprocess, logging, argparse, platform
 from collections import namedtuple
 
 # is_fubar assumes that a configuration is not completely messed up
@@ -298,17 +298,23 @@ def build_ciphers_lists():
               'S128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-' \
               'AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK'
     blackhole = open(os.devnull, 'w')
+
+    # use system openssl if not on linux 64
+    openssl='openssl'
+    if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
+        openssl='./openssl'
+
     logging.debug('Loading all ciphers: ' + allC)
-    all_ciphers = subprocess.Popen(['./openssl', 'ciphers', allC],
+    all_ciphers = subprocess.Popen([openssl, 'ciphers', allC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading old ciphers: ' + oldC)
-    old_ciphers = subprocess.Popen(['./openssl', 'ciphers', oldC],
+    old_ciphers = subprocess.Popen([openssl, 'ciphers', oldC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading intermediate ciphers: ' + intC)
-    intermediate_ciphers = subprocess.Popen(['./openssl', 'ciphers', intC],
+    intermediate_ciphers = subprocess.Popen([openssl, 'ciphers', intC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading modern ciphers: ' + modernC)
-    modern_ciphers = subprocess.Popen(['./openssl', 'ciphers', modernC],
+    modern_ciphers = subprocess.Popen([openssl, 'ciphers', modernC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     blackhole.close()
 
