@@ -1,2 +1,2 @@
-./mozilla
-./top1m/results
+mozilla/*
+top1m/results/*
