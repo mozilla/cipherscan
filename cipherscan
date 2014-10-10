@@ -468,6 +468,12 @@ debug "Port: $PORT"
 TARGET=$HOST:$PORT
 debug "target: $TARGET"
 
+# test our openssl is usable
+tmp="$($OPENSSLBIN -h 2>&1 1>/dev/null)"
+if [ $? -gt 0 ]; then
+    OPENSSLBIN=$(which openssl)
+    echo "custom openssl not executable, falling back to system one from $OPENSSLBIN"
+fi
 
 SCLIENTARGS=$(sed -e s,${TEMPTARGET},,<<<"${@}")
 debug "sclientargs: $SCLIENTARGS"
