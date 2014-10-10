@@ -485,7 +485,9 @@ debug "target: $TARGET"
 tmp="$($OPENSSLBIN -h 2>&1 1>/dev/null)"
 if [ $? -gt 0 ]; then
     OPENSSLBIN=$(which openssl)
-    echo "custom openssl not executable, falling back to system one from $OPENSSLBIN"
+    if [ "$OUTPUTFORMAT" == "terminal" ]; then
+        echo "custom openssl not executable, falling back to system one from $OPENSSLBIN"
+    fi
 fi
 
 SCLIENTARGS=$(sed -e s,${TEMPTARGET},,<<<"${@}")
