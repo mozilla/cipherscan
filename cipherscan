@@ -331,7 +331,7 @@ display_results_in_terminal() {
 display_results_in_json() {
     # Display the results in json
     ctr=0
-    echo -n "{\"target\":\"$TARGET\",\"date\":\"$(date '+%FT%T.0Z')\",\"serverside\":\"${serverside}\",\"ciphersuite\": ["
+    echo -n "{\"target\":\"$TARGET\",\"utctimestamp\":\"$(date -u '+%FT%T.0Z')\",\"serverside\":\"${serverside}\",\"ciphersuite\": ["
     for cipher in "${cipherspref[@]}"; do
         [ $ctr -gt 0 ] && echo -n ','
         echo -n "{\"cipher\":\"$(echo $cipher|awk '{print $1}')\","
