@@ -12,6 +12,16 @@ DOBENCHMARK=0
 BENCHMARKITER=30
 OPENSSLBIN="$(dirname $0)/openssl"
 
+# test that timeout or gtimeout (darwin) are present
+TIMEOUTBIN="$(which timeout)"
+if [ "$TIMEOUTBIN" == "" ]; then
+    TIMEOUTBIN="$(which gtimeout)"
+    if [ "$TIMEOUTBIN" == "" ]; then
+        echo "neither timeout nor gtimeout are present. install coreutils with {apt-get,yum,brew} install coreutils"
+        exit 1
+    fi
+fi
+
 # find a list of trusted CAs on the local system, or use the provided list
 if [ -z "$CACERTS" ]; then
     for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
@@ -186,7 +196,7 @@ test_cipher_on_target() {
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
     local ciphersuite="$1"
-    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
@@ -209,7 +219,7 @@ get_cipher_pref() {
     [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
     local ciphersuite="$1"
 
-    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client"
+    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
     if [ -n "$CAPATH" ]; then
         sslcommand+=" -CApath $CAPATH"
     elif [ -e $CACERTS ]; then
@@ -371,7 +381,7 @@ test_serverside_ordering() {
         ciphersuite+=":$cipher"
     fi
 
-    local sslcommand="timeout $TIMEOUT $OPENSSLBIN s_client"
+    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
     if [ -n "$CAPATH" ]; then
         sslcommand+=" -CApath $CAPATH"
     elif [ -e "$CACERTS" ]; then
@@ -502,7 +512,7 @@ if [ $ALLCIPHERS -gt 0 ]; then
     echo; echo "All accepted ciphersuites"
     for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
         r="fail"
-        osslcommand="timeout $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
+        osslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
         test_cipher_on_target "$osslcommand"
         if [ $? -eq 0 ]; then
             r="pass"
