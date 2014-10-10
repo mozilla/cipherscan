@@ -8,20 +8,19 @@
 DOBENCHMARK=0
 BENCHMARKITER=30
 OPENSSLBIN="$(dirname $0)/openssl"
+# find a list of trusted CAs on the local system, or use the provided list
 if [ -z "$CACERTS" ]; then
-  for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
-    if [ -e "$f" ]; then
-      CACERTS="$f"
-      break
-    fi
-  done
+    for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
+        if [ -e "$f" ]; then
+            CACERTS="$f"
+            break
+        fi
+    done
 fi
 if [ ! -e "$CACERTS" ]; then
-    CACERTS="/etc/ssl/certs/ca-certificates.crt"
+    CACERTS="$(dirname $0)/ca-bundle.crt"
 fi
-if [ ! -e "$CACERTS" ]; then
-    echo "Warning: CA Certificates not found at $CACERTS, export CACERTS variable with location of your trust anchors" 1>&2
-fi
+
 # RSA ciphers are put at the end to force Google servers to accept ECDSA ciphers
 # (probably a result of a workaround for the bug in Apple implementation of ECDSA)
 CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
