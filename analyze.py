@@ -233,7 +233,7 @@ def evaluate_all(results):
             status = "old ssl with bad ordering"
 
     if is_fubar(results):
-        return "bad ssl"
+        status = "bad ssl"
 
     return status
 
@@ -268,7 +268,7 @@ def process_results(data, level=None):
                 for failure in failures[lvl]:
                     print("* " + failure)
 
-def build_ciphers_lists():
+def build_ciphers_lists(opensslbin):
     global all_ciphers, old_ciphers, intermediate_ciphers, modern_ciphers, errors
     # from https://wiki.mozilla.org/Security/Server_Side_TLS
     allC = 'ALL:COMPLEMENTOFALL:+aRSA'
@@ -300,21 +300,24 @@ def build_ciphers_lists():
     blackhole = open(os.devnull, 'w')
 
     # use system openssl if not on linux 64
-    openssl='openssl'
-    if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
-        openssl='./openssl'
+    if opensslbin == '':
+        if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
+            opensslbin='./openssl'
+        else:
+            opensslbin='openssl'
+            print("warning: analyze.py is using system's openssl, which may limit the tested ciphers and recommendations")
 
     logging.debug('Loading all ciphers: ' + allC)
-    all_ciphers = subprocess.Popen([openssl, 'ciphers', allC],
+    all_ciphers = subprocess.Popen([opensslbin, 'ciphers', allC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading old ciphers: ' + oldC)
-    old_ciphers = subprocess.Popen([openssl, 'ciphers', oldC],
+    old_ciphers = subprocess.Popen([opensslbin, 'ciphers', oldC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading intermediate ciphers: ' + intC)
-    intermediate_ciphers = subprocess.Popen([openssl, 'ciphers', intC],
+    intermediate_ciphers = subprocess.Popen([opensslbin, 'ciphers', intC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading modern ciphers: ' + modernC)
-    modern_ciphers = subprocess.Popen([openssl, 'ciphers', modernC],
+    modern_ciphers = subprocess.Popen([opensslbin, 'ciphers', modernC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     blackhole.close()
 
@@ -335,6 +338,8 @@ def main():
         help='target configuration level [old, intermediate, modern]')
     parser.add_argument('-t', dest='target',
         help='analyze a <target>, invokes cipherscan')
+    parser.add_argument('-o', dest='openssl',
+        help='path to openssl binary, if you don\'t like the default')
     args = parser.parse_args()
 
     if args.debug:
@@ -342,12 +347,16 @@ def main():
     else:
         logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
-    build_ciphers_lists()
+    build_ciphers_lists(args.openssl)
 
     if args.target:
         # evaluate target specified as argument
         logging.debug('Invoking cipherscan with target: ' + args.target)
-        data = subprocess.check_output(['./cipherscan', '-j', args.target])
+        data=''
+        if args.openssl:
+            data = subprocess.check_output(['./cipherscan', '-o', args.openssl, '-j', args.target])
+        else:
+            data = subprocess.check_output(['./cipherscan', '-j', args.target])
         process_results(data, args.level)
     else:
         if os.fstat(args.infile.fileno()).st_size < 2:
