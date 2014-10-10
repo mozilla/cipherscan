@@ -8,6 +8,7 @@
 DOBENCHMARK=0
 BENCHMARKITER=30
 OPENSSLBIN="$(dirname $0)/openssl"
+
 # find a list of trusted CAs on the local system, or use the provided list
 if [ -z "$CACERTS" ]; then
     for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
@@ -63,7 +64,6 @@ This enables checking smtp/imap/pop3/ftp/xmpp via -starttls
 EXAMPLES: $0 -starttls xmpp jabber.ccc.de:5222
 "
 }
-
 
 verbose() {
     if [ $VERBOSE != 0 ]; then
@@ -180,7 +180,6 @@ test_cipher_on_target() {
     fi
 }
 
-
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
     local ciphersuite="$1"
@@ -200,7 +199,6 @@ bench_cipher() {
     # Microseconds
     cipherbenchms="$((t/1000/$BENCHMARKITER))"
 }
-
 
 # Connect to the target and retrieve the chosen cipher
 # recursively until the connection fails
@@ -228,7 +226,6 @@ get_cipher_pref() {
     fi
     sleep $DELAY
 }
-
 
 display_results_in_terminal() {
     # Display the results
@@ -318,7 +315,6 @@ display_results_in_terminal() {
     fi
 }
 
-
 display_results_in_json() {
     # Display the results in json
     ctr=0
@@ -341,7 +337,6 @@ display_results_in_json() {
 }
 
 test_serverside_ordering() {
-
     local ciphersuite=""
     local prefered=""
     # server supports only one cipher or no ciphers, so it effectively uses server side ordering...
