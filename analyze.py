@@ -1,12 +1,21 @@
 #!/usr/bin/env python
+#
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 # Contributor: Julien Vehent jvehent@mozilla.com [:ulfr]
+#              lazy.dogtown@gmail.com
+# 
+# 
 
 import sys, os, json, subprocess, logging, argparse
 from collections import namedtuple
+
+default_openssl_bin = subprocess.Popen(['which', 'openssl'], stdout=subprocess.PIPE).communicate()[0].rstrip()
+
+# incase you want to ship your own openssl
+#default_openssl_bin= "./openssl"
 
 # is_fubar assumes that a configuration is not completely messed up
 # and looks for reasons to think otherwise. it will return True if
@@ -16,19 +25,19 @@ def is_fubar(results):
     fubar_ciphers = set(all_ciphers) - set(old_ciphers)
     for conn in results['ciphersuite']:
         if conn['cipher'] in fubar_ciphers:
-            logging.debug(conn['cipher'] + ' is in the list of fubar ciphers')
+            logging.debug('BAD: ' + conn['cipher'] + ' is in the list of fubar ciphers')
             fubar = True
         if 'SSLv2' in conn['protocols']:
-            logging.debug('SSLv2 is in the list of fubar protocols')
+            logging.debug('BAD: SSLv2 is in the list of fubar protocols')
             fubar = True
         if conn['pubkey'] < 2048:
-            logging.debug(conn['pubkey'] + ' is a fubar pubkey size')
+            logging.debug('BAD: ' + conn['pubkey'] + ' is a fubar pubkey size')
             fubar = True
         if 'md5WithRSAEncryption' in conn['sigalg']:
-            logging.debug(conn['sigalg']+ ' is a fubar cert signature')
+            logging.debug('BAD: ' + conn['sigalg']+ ' is a fubar cert signature')
             fubar = True
         if conn['trusted'] == 'False':
-            logging.debug('The certificate is not trusted, which is quite fubar')
+            logging.debug('BAD: The certificate is not trusted, which is quite fubar')
             fubar = True
     return fubar
 
@@ -233,7 +242,7 @@ def evaluate_all(results):
             status = "old ssl with bad ordering"
 
     if is_fubar(results):
-        return "bad ssl"
+        return "bad ssl (turn on debugging to see why)"
 
     return status
 
@@ -299,20 +308,21 @@ def build_ciphers_lists():
               'AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK'
     blackhole = open(os.devnull, 'w')
     logging.debug('Loading all ciphers: ' + allC)
-    all_ciphers = subprocess.Popen(['./openssl', 'ciphers', allC],
+    all_ciphers = subprocess.Popen([openssl_bin, 'ciphers', allC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading old ciphers: ' + oldC)
-    old_ciphers = subprocess.Popen(['./openssl', 'ciphers', oldC],
+    old_ciphers = subprocess.Popen([openssl_bin, 'ciphers', oldC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading intermediate ciphers: ' + intC)
-    intermediate_ciphers = subprocess.Popen(['./openssl', 'ciphers', intC],
+    intermediate_ciphers = subprocess.Popen([openssl_bin, 'ciphers', intC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     logging.debug('Loading modern ciphers: ' + modernC)
-    modern_ciphers = subprocess.Popen(['./openssl', 'ciphers', modernC],
+    modern_ciphers = subprocess.Popen([openssl_bin, 'ciphers', modernC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
     blackhole.close()
 
 def main():
+    global openssl_bin
     parser = argparse.ArgumentParser(
         description='Analyze cipherscan results and provides guidelines to improve configuration.',
         usage='\n* Analyze a single target, invokes cipherscan: $ ./analyze.py -t [target]' \
@@ -329,19 +339,31 @@ def main():
         help='target configuration level [old, intermediate, modern]')
     parser.add_argument('-t', dest='target',
         help='analyze a <target>, invokes cipherscan')
+    parser.add_argument('-o', dest='openssl',
+        help='give path to openssl, defaults to `which openssl`')    
     args = parser.parse_args()
 
     if args.debug:
         logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+        
     else:
         logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
+
+    if args.openssl:
+        openssl_bin = args.openssl
+    else:
+        openssl_bin = default_openssl_bin
+
+    logging.debug('using openssl - binary ' + openssl_bin)
+
+    
     build_ciphers_lists()
 
     if args.target:
         # evaluate target specified as argument
         logging.debug('Invoking cipherscan with target: ' + args.target)
-        data = subprocess.check_output(['./cipherscan', '-j', args.target])
+        data = subprocess.check_output(['./cipherscan', '-o', openssl_bin, '-j', args.target])
         process_results(data, args.level)
     else:
         if os.fstat(args.infile.fileno()).st_size < 2:
