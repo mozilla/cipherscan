@@ -12,24 +12,42 @@ from collections import namedtuple
 # and looks for reasons to think otherwise. it will return True if
 # it finds one of these reason
 def is_fubar(results):
+    lvl = 'fubar'
     fubar = False
+    has_ssl2 = False
+    has_wrong_pubkey = False
+    has_md5_sig = False
+    has_untrust_cert = False
     fubar_ciphers = set(all_ciphers) - set(old_ciphers)
     for conn in results['ciphersuite']:
         if conn['cipher'] in fubar_ciphers:
+            failures[lvl].append("remove cipher " + conn['cipher'])
             logging.debug(conn['cipher'] + ' is in the list of fubar ciphers')
             fubar = True
         if 'SSLv2' in conn['protocols']:
+            has_ssl2 = True
             logging.debug('SSLv2 is in the list of fubar protocols')
             fubar = True
         if conn['pubkey'] < 2048:
+            has_wrong_pubkey = True
             logging.debug(conn['pubkey'] + ' is a fubar pubkey size')
             fubar = True
         if 'md5WithRSAEncryption' in conn['sigalg']:
+            has_md5_sig = True
             logging.debug(conn['sigalg']+ ' is a fubar cert signature')
             fubar = True
         if conn['trusted'] == 'False':
+            has_untrust_cert = True
             logging.debug('The certificate is not trusted, which is quite fubar')
             fubar = True
+    if has_ssl2:
+        failures[lvl].append("disable SSLv2")
+    if has_md5_sig:
+        failures[lvl].append("don't use a cert with a MD5 signature")
+    if has_wrong_pubkey:
+        failures[lvl].append("don't use a public key smaller than 2048 bits")
+    if has_untrust_cert:
+        failures[lvl].append("don't use an untrusted or self-signed certificate")
     return fubar
 
 # is_old assumes a configuration *is* old, and will return False if
@@ -242,6 +260,7 @@ def process_results(data, level=None):
     # initialize the failures struct
     global failures
     failures = dict()
+    failures['fubar'] = []
     failures['old'] = []
     failures['intermediate'] = []
     failures['modern'] = []
@@ -254,6 +273,11 @@ def process_results(data, level=None):
             print(results['target'] + " has " + evaluate_all(results))
     except TypeError, e:
         pass
+
+    if len(failures['fubar']) > 0:
+        print("\nSome things that are really FUBAR:")
+        for failure in failures['fubar']:
+            print("* " + failure)
 
     # print failures
     if level:
@@ -300,7 +324,7 @@ def build_ciphers_lists(opensslbin):
     blackhole = open(os.devnull, 'w')
 
     # use system openssl if not on linux 64
-    if opensslbin == '':
+    if not opensslbin:
         if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
             opensslbin='./openssl'
         else:
