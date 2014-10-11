@@ -223,8 +223,28 @@ def is_modern(results):
         failures[lvl].append("consider enabling OCSP Stapling")
     return modern
 
-def is_ordered(results, ciphersuite):
-    return True
+def is_ordered(results, ref_ciphersuite, lvl):
+    ordered = True
+    previous_pos = 0
+    # iterate through the list of ciphers returned by the target
+    for conn in results['ciphersuite']:
+        pos = 0
+        # compare against each cipher of the reference ciphersuite
+        for ref_cipher in ref_ciphersuite:
+            # if the target cipher matches the reference ciphersuite,
+            # look for its position against the reference and flag cipher
+            # that violate the reference ordering
+            if conn['cipher'] == ref_cipher:
+                logging.debug("{0} found in reference ciphersuite at position {1}".format(conn['cipher'], pos))
+                if pos < previous_pos:
+                    failures[lvl].append("increase priority of {0} over {1}".format(conn['cipher'], ref_ciphersuite[previous_pos]))
+                    ordered = False
+                # save current position
+                previous_pos = pos
+            pos += 1
+    if not ordered:
+        failures[lvl].append("fix ciphersuite ordering, use recommended " + lvl + " ciphersuite")
+    return ordered
 
 def evaluate_all(results):
     status = "obscure unknown ssl"
@@ -233,22 +253,19 @@ def evaluate_all(results):
         return "no ssl"
 
     if is_modern(results):
-        if is_ordered(results, modern_ciphers):
-            status = "modern tls"
-        else:
-            status = "modern tls with bad ordering"
+        status = "modern tls"
+    if not is_ordered(results, modern_ciphers, "modern"):
+        status = "modern tls with bad ordering"
 
     if is_intermediate(results):
-        if is_ordered(results, intermediate_ciphers):
-            status = "intermediate tls"
-        else:
-            status = "intermediate tls with bad ordering"
+        status = "intermediate tls"
+    if not is_ordered(results, intermediate_ciphers, "intermediate"):
+        status = "intermediate tls with bad ordering"
 
     if is_old(results):
-        if is_ordered(results, old_ciphers):
-            status = "old ssl"
-        else:
-            status = "old ssl with bad ordering"
+        status = "old ssl"
+    if not is_ordered(results, old_ciphers, "old"):
+        status = "old ssl with bad ordering"
 
     if is_fubar(results):
         status = "bad ssl"
@@ -275,7 +292,7 @@ def process_results(data, level=None):
         pass
 
     if len(failures['fubar']) > 0:
-        print("\nSome things that are really FUBAR:")
+        print("\nThings that are really FUBAR:")
         for failure in failures['fubar']:
             print("* " + failure)
 
@@ -302,9 +319,10 @@ def build_ciphers_lists(opensslbin):
            'AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA' \
            '384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AE' \
            'S128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-' \
-           'AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128:AES256:AES:DES-CBC3-SHA:HI' \
-           'GH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-R' \
-           'SA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'
+           'AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES' \
+           '256-GCM-SHA384:AES128:AES256:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!R' \
+           'C4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-S' \
+           'HA'
     intC = 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-S' \
            'HA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM' \
            '-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-' \
