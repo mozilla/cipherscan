@@ -7,6 +7,8 @@
 
 import sys, os, json, subprocess, logging, argparse, platform
 from collections import namedtuple
+from datetime import datetime
+from copy import deepcopy
 
 # is_fubar assumes that a configuration is not completely messed up
 # and looks for reasons to think otherwise. it will return True if
@@ -253,49 +255,67 @@ def is_ordered(results, ref_ciphersuite, lvl):
     return ordered
 
 def evaluate_all(results):
-    status = "obscure unknown ssl"
+    status = "obscure or unknown"
 
     if len(results['ciphersuite']) == 0:
-        return "no ssl"
+        return "no"
 
     if is_modern(results):
-        status = "modern tls"
+        status = "modern"
     if not is_ordered(results, modern_ciphers, "modern"):
-        status = "modern tls with bad ordering"
+        status = "modern with bad ordering"
 
     if is_intermediate(results):
-        status = "intermediate tls"
+        status = "intermediate"
     if not is_ordered(results, intermediate_ciphers, "intermediate"):
-        status = "intermediate tls with bad ordering"
+        status = "intermediate with bad ordering"
 
     if is_old(results):
-        status = "old ssl"
+        status = "old"
     if not is_ordered(results, old_ciphers, "old"):
-        status = "old ssl with bad ordering"
+        status = "old with bad ordering"
 
     if is_fubar(results):
-        status = "bad ssl"
+        status = "bad"
 
     return status
 
-def process_results(data, level=None):
+def process_results(data, level=None, do_json=False):
     results = dict()
     # initialize the failures struct
     global failures
+    json_output = dict()
     failures = dict()
     failures['fubar'] = []
     failures['old'] = []
     failures['intermediate'] = []
     failures['modern'] = []
+    if not level:
+        level='none'
     try:
         results = json.loads(data)
     except ValueError, e:
         print("invalid json data")
     try:
         if results:
-            print(results['target'] + " has " + evaluate_all(results))
+            if do_json:
+                json_output['target'] = results['target']
+                d = datetime.utcnow()
+                json_output['utctimestamp'] = d.isoformat("T") + "Z"
+                json_output['level'] = evaluate_all(results)
+                json_output['target_level'] = level
+                json_output['compliance'] = False
+                if json_output['level'] == json_output['target_level']:
+                    json_output['compliance'] = True
+            else:
+                print(results['target'] + " has " + evaluate_all(results) + " ssl/tls")
     except TypeError, e:
-        pass
+        return False
+
+    if do_json:
+        json_output['failures'] = deepcopy(failures)
+        print json.dumps(json_output)
+        return True
 
     if len(failures['fubar']) > 0:
         print("\nThings that are really FUBAR:")
@@ -303,7 +323,7 @@ def process_results(data, level=None):
             print("* " + failure)
 
     # print failures
-    if level:
+    if level != 'none':
         if len(failures[level]) > 0:
             print("\nChanges needed to match the " + level + " level:")
             for failure in failures[level]:
@@ -314,6 +334,7 @@ def process_results(data, level=None):
                 print("\nChanges needed to match the " + lvl + " level:")
                 for failure in failures[lvl]:
                     print("* " + failure)
+    return True
 
 def build_ciphers_lists(opensslbin):
     global all_ciphers, old_ciphers, intermediate_ciphers, modern_ciphers, errors
@@ -388,6 +409,8 @@ def main():
         help='analyze a <target>, invokes cipherscan')
     parser.add_argument('-o', dest='openssl',
         help='path to openssl binary, if you don\'t like the default')
+    parser.add_argument('-j', dest='json', action='store_true',
+        help='output results in json format')
     args = parser.parse_args()
 
     if args.debug:
@@ -405,7 +428,7 @@ def main():
             data = subprocess.check_output(['./cipherscan', '-o', args.openssl, '-j', args.target])
         else:
             data = subprocess.check_output(['./cipherscan', '-j', args.target])
-        process_results(data, args.level)
+        process_results(data, args.level, args.json)
     else:
         if os.fstat(args.infile.fileno()).st_size < 2:
             logging.error("invalid input file")
@@ -413,7 +436,7 @@ def main():
             sys.exit(1)
         data = args.infile.readline()
         logging.debug('Evaluating results from stdin: ' + data)
-        process_results(data, args.level)
+        process_results(data, args.level, args.json)
 
 if __name__ == "__main__":
     main()
