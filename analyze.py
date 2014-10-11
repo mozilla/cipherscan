@@ -114,6 +114,8 @@ def is_old(results):
         old = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
+    if results['serverside'] != 'True':
+        failures[lvl].append("enforce server side ordering")
     return old
 
 # is_intermediate is similar to is_old but for intermediate configuration from
@@ -174,6 +176,8 @@ def is_intermediate(results):
         inter = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
+    if results['serverside'] != 'True':
+        failures[lvl].append("enforce server side ordering")
     return inter
 
 # is_modern is similar to is_old but for modern configuration from
@@ -221,6 +225,8 @@ def is_modern(results):
         modern = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
+    if results['serverside'] != 'True':
+        failures[lvl].append("enforce server side ordering")
     return modern
 
 def is_ordered(results, ref_ciphersuite, lvl):
