@@ -307,6 +307,8 @@ def process_results(data, level=None, do_json=False):
                 json_output['compliance'] = False
                 if json_output['level'] == json_output['target_level']:
                     json_output['compliance'] = True
+                if operator:
+                    json_output['operator'] = operator
             else:
                 print(results['target'] + " has " + evaluate_all(results) + " ssl/tls")
     except TypeError, e:
@@ -411,12 +413,19 @@ def main():
         help='path to openssl binary, if you don\'t like the default')
     parser.add_argument('-j', dest='json', action='store_true',
         help='output results in json format')
+    parser.add_argument('--ops', dest='operator',
+        help='optional name of the operator\'s team added into the JSON output (for database insertion)')
     args = parser.parse_args()
 
     if args.debug:
         logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
     else:
         logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+
+    global operator
+    operator=''
+    if args.operator:
+        operator=args.operator
 
     build_ciphers_lists(args.openssl)
 
