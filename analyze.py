@@ -145,7 +145,6 @@ def is_intermediate(results):
             has_tls1 = True
         if 'sha256WithRSAEncryption' not in conn['sigalg']:
             logging.debug(conn['sigalg'][0] + ' is a not an intermediate signature')
-            inter = False
             has_sha256 = False
         if conn['cipher'][0:2] == 'DHE':
             if conn['pfs'] != 'DH,2048bits':
@@ -171,8 +170,7 @@ def is_intermediate(results):
         failures[lvl].append("add cipher AES128-SHA")
         inter = False
     if not has_sha256:
-        failures[lvl].append("use a certificate with sha256WithRSAEncryption signature")
-        inter = False
+        failures[lvl].append("consider using a SHA-256 certificate")
     if not has_dhparam:
         failures[lvl].append("use a DH parameter of 2048 bits")
         inter = False
@@ -220,7 +218,7 @@ def is_modern(results):
         logging.debug("missing protocol wanted in the modern configuration:" + proto)
         failures[lvl].append('consider enabling ' + proto)
     if not has_sha256:
-        failures[lvl].append("use a certificate with sha256WithRSAEncryption signature")
+        failures[lvl].append("use a SHA-256 certificate")
         modern = False
     if not has_dhparam:
         failures[lvl].append("use a DH parameter of 2048 bits")
