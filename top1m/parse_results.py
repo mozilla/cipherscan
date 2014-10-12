@@ -21,8 +21,10 @@ def natural_sort(l):
     alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ]
     return sorted(l, key = alphanum_key)
 
-""" list of ciphers offerred by Firefox 29 by default """
-firefox_ciphers=[
+""" client config cipher simulation """
+client_ciphers={}
+""" list of ciphers offered by Firefox 29 by default """
+client_ciphers['FF 29']=[
         'ECDHE-ECDSA-AES128-GCM-SHA256',
         'ECDHE-RSA-AES128-GCM-SHA256',
         'ECDHE-ECDSA-AES256-SHA',
@@ -50,10 +52,19 @@ firefox_ciphers=[
 report_untrused=False
 
 cipherstats = defaultdict(int)
-FF_RC4_Only_cipherstats = defaultdict(int)
-FF_RC4_preferred_cipherstats = defaultdict(int)
-FF_incompatible_cipherstats = defaultdict(int)
-FF_selected_cipherstats = defaultdict(int)
+
+# stats about different client performance
+# ciphers selected by them, unsupported, etc.
+client_RC4_Only_cipherstats={}
+client_RC4_preferred_cipherstats={}
+client_incompatible_cipherstats={}
+client_selected_cipherstats={}
+for client_name in client_ciphers:
+    client_RC4_Only_cipherstats[client_name] = defaultdict(int)
+    client_RC4_preferred_cipherstats[client_name] = defaultdict(int)
+    client_incompatible_cipherstats[client_name] = defaultdict(int)
+    client_selected_cipherstats[client_name] = defaultdict(int)
+
 cipherordering = defaultdict(int)
 pfsstats = defaultdict(int)
 protocolstats = defaultdict(int)
@@ -84,13 +95,22 @@ for r,d,flist in os.walk(path):
         DES3 = False
         CAMELLIA = False
         RC4 = False
-        """ the following depends on FF_compat, so by default it can be True """
-        RC4_Only_FF = True
-        FF_compat = False
-        temp_FF_incompat = {}
+        """ variables to support handshake simulation for different clients """
+        client_RC4_Only={}
+        client_compat={}
+        temp_client_incompat={}
+        client_RC4_Pref={}
+        client_selected={}
+        for client_name in client_ciphers:
+            # the following depends on client_compat, so by default it can be True
+            client_RC4_Only[client_name]=True
+            client_compat[client_name]=False
+            temp_client_incompat[client_name]={}
+            client_RC4_Pref[client_name]=None
+            client_selected[client_name]=None
+
+        """ server side list of supported ciphers """
         list_of_ciphers = []
-        FF_RC4_Pref = None
-        FF_selected = None
         ADH = False
         DHE = False
         AECDH = False
@@ -133,15 +153,17 @@ for r,d,flist in os.walk(path):
                 list_of_ciphers.append(entry['cipher'])
 
                 # check if the advertised ciphers are not effectively RC4 Only
-                # for firefox or incompatible with firefox
-                if entry['cipher'] in firefox_ciphers:
-                    # if this is first cipher and we already are getting RC4
-                    # then it means that RC4 is preferred
-                    FF_compat = True
-                    if not 'RC4' in entry['cipher']:
-                        RC4_Only_FF = False
-                else:
-                    temp_FF_incompat[entry['cipher']] = 1
+                # for clients or incompatible with them
+                for client_name in client_ciphers:
+                    if entry['cipher'] in client_ciphers[client_name]:
+                        # if this is first cipher and we already are getting RC4
+                        # then it means that RC4 is preferred (and client is
+                        # compatible with server)
+                        client_compat[client_name]=True
+                        if not 'RC4' in entry['cipher']:
+                            client_RC4_Only[client_name] = False
+                    else:
+                        temp_client_incompat[client_name][entry['cipher']] = 1
 
                 """ store the ciphers supported """
                 if 'ADH' in entry['cipher'] or 'AECDH' in entry['cipher']:
@@ -279,22 +301,23 @@ for r,d,flist in os.walk(path):
         else:
             cipherordering['Unknown'] += 1
 
-        """ simulate handshake with Firefox """
-        if FF_compat:
-            if 'serverside' in results and results['serverside'] == "False":
-                for cipher in firefox_ciphers:
-                    if cipher in list_of_ciphers:
-                        FF_selected = cipher
-                        if 'RC4' in cipher:
-                            FF_RC4_Pref = True
-                        break
-            else:
-                for cipher in list_of_ciphers:
-                    if cipher in firefox_ciphers:
-                        FF_selected = cipher
-                        if 'RC4' in cipher:
-                            FF_RC4_Pref = True
-                        break
+        """ simulate handshake with clients """
+        for client_name in client_ciphers:
+            if client_compat[client_name]:
+                if 'serverside' in results and results['serverside'] == "False":
+                    for cipher in client_ciphers[client_name]:
+                        if cipher in list_of_ciphers:
+                            client_selected[client_name] = cipher
+                            if 'RC4' in cipher:
+                                client_RC4_Pref[client_name] = True
+                            break
+                else:
+                    for cipher in list_of_ciphers:
+                        if cipher in client_ciphers[client_name]:
+                            client_selected[client_name] = cipher
+                            if 'RC4' in cipher:
+                                client_RC4_Pref[client_name] = True
+                            break
 
         for s in tempsigstats:
             sigalg[s] += 1
@@ -346,26 +369,29 @@ for r,d,flist in os.walk(path):
                         cipherstats['RC4 forced in TLS1.1+'] += 1
                 cipherstats['RC4 Preferred'] += 1
 
-        if FF_compat:
-            if 'ECDHE' in FF_selected:
-                FF_selected_cipherstats['x:ECDHE'] += 1
-            elif 'DHE' in FF_selected or 'EDH' in FF_selected:
-                FF_selected_cipherstats['x:DHE'] += 1
+        for client_name in client_ciphers:
+            if client_compat[client_name]:
+                if 'ECDHE' in client_selected[client_name]:
+                    client_selected_cipherstats[client_name]['x:ECDHE'] += 1
+                elif 'DHE' in client_selected[client_name]:
+                    client_selected_cipherstats[client_name]['x:DHE'] += 1
+                else:
+                    client_selected_cipherstats[client_name]['x:kRSA'] += 1
+
+                client_selected_cipherstats[client_name][client_selected[client_name]] += 1
+
+                if client_RC4_Only[client_name] and ciphertypes != 1:
+                    cipherstats['x:' + client_name + ' RC4 Only'] += 1
+                    for cipher in temp_client_incompat[client_name]:
+                        client_RC4_Only_cipherstats[client_name][cipher] += 1
+                if client_RC4_Pref[client_name] and not 'RC4' in results['ciphersuite'][0]['cipher']:
+                    cipherstats['x:' + client_name + ' RC4 Preferred'] += 1
+                    for cipher in temp_client_incompat[client_name]:
+                        client_RC4_preferred_cipherstats[client_name][cipher] += 1
             else:
-                FF_selected_cipherstats['x:kRSA'] += 1
-            FF_selected_cipherstats[FF_selected] += 1
-            if RC4_Only_FF and ciphertypes != 1:
-                cipherstats['x:FF 29 RC4 Only'] += 1
-                for cipher in temp_FF_incompat:
-                    FF_RC4_Only_cipherstats[cipher] += 1
-            if FF_RC4_Pref and not 'RC4' in results['ciphersuite'][0]['cipher']:
-                cipherstats['x:FF 29 RC4 Preferred'] += 1
-                for cipher in temp_FF_incompat:
-                    FF_RC4_preferred_cipherstats[cipher] += 1
-        else:
-            cipherstats['x:FF 29 incompatible'] += 1
-            for cipher in temp_FF_incompat:
-                FF_incompatible_cipherstats[cipher] += 1
+                cipherstats['x:' + client_name + ' incompatible'] += 1
+                for cipher in temp_client_incompat[client_name]:
+                    client_incompatible_cipherstats[client_name][cipher] += 1
 
         for cipher in tempcipherstats:
             cipherstats[cipher] += 1
@@ -420,12 +446,13 @@ for r,d,flist in os.walk(path):
     #if total % 1999 == 0:
     #    break
 
-""" The 'x:FF 29 RC4 Preferred' counts only sites that effectively prefer
-    RC4 when using FF, to make reporting more readable, sum it with sites
-    that do that for all ciphers"""
+""" The 'x:' + client_name + ' RC4 Preferred' counts only sites that
+    effectively prefer RC4 when using given client, to make reporting more
+    readable, sum it with sites that do that for all ciphers"""
 
-if "x:FF 29 RC4 Preferred" in cipherstats and "RC4 Preferred" in cipherstats:
-    cipherstats['x:FF 29 RC4 Preferred'] += cipherstats['RC4 Preferred']
+for client_name in client_ciphers:
+    if 'x:' + client_name + ' RC4 Preferred' in cipherstats and 'RC4 Preferred' in cipherstats:
+        cipherstats['x:' + client_name + ' RC4 Preferred'] += cipherstats['RC4 Preferred']
 
 print("SSL/TLS survey of %i websites from Alexa's top 1 million" % total)
 if report_untrused == False:
@@ -445,29 +472,32 @@ for stat in sorted(cipherordering):
     percent = round(cipherordering[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(cipherordering[stat]).ljust(10) + str(percent).ljust(4) + "\n")
 
-print("\nFF 29 selected ciphers        Count    Percent")
-print("-----------------------------+---------+------")
-for stat in sorted(FF_selected_cipherstats):
-    percent = round(FF_selected_cipherstats[stat] / total * 100, 4)
-    sys.stdout.write(stat.ljust(30) + " " + str(FF_selected_cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+print("\nCLIENT specific statistics\n")
 
-print("\nFF 29 RC4 Only other ciphers  Count    Percent")
-print("-----------------------------+---------+------")
-for stat in sorted(FF_RC4_Only_cipherstats):
-    percent = round(FF_RC4_Only_cipherstats[stat] / total * 100, 4)
-    sys.stdout.write(stat.ljust(30) + " " + str(FF_RC4_Only_cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+for client_name in client_ciphers:
+    print("\n" + client_name + " selected ciphers        Count    Percent")
+    print("-----------------------------+---------+------")
+    for stat in sorted(client_selected_cipherstats[client_name]):
+        percent = round(client_selected_cipherstats[client_name][stat] / total * 100, 4)
+        sys.stdout.write(stat.ljust(30) + " " + str(client_selected_cipherstats[client_name][stat]).ljust(10) + str(percent).ljust(4) + "\n")
 
-print("\nFF 29 RC4 pref other ciphers  Count    Percent")
-print("-----------------------------+---------+------")
-for stat in sorted(FF_RC4_preferred_cipherstats):
-    percent = round(FF_RC4_preferred_cipherstats[stat] / total * 100, 4)
-    sys.stdout.write(stat.ljust(30) + " " + str(FF_RC4_preferred_cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+    print("\n" + client_name + " RC4 Only other ciphers  Count    Percent")
+    print("-----------------------------+---------+------")
+    for stat in sorted(client_RC4_Only_cipherstats[client_name]):
+        percent = round(client_RC4_Only_cipherstats[client_name][stat] / total * 100, 4)
+        sys.stdout.write(stat.ljust(30) + " " + str(client_RC4_Only_cipherstats[client_name][stat]).ljust(10) + str(percent).ljust(4) + "\n")
 
-print("\nFF 29 incompatible ciphers    Count    Percent")
-print("-----------------------------+---------+------")
-for stat in sorted(FF_incompatible_cipherstats):
-    percent = round(FF_incompatible_cipherstats[stat] / total * 100, 4)
-    sys.stdout.write(stat.ljust(30) + " " + str(FF_incompatible_cipherstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+    print("\n" + client_name + " RC4 pref other ciphers  Count    Percent")
+    print("-----------------------------+---------+------")
+    for stat in sorted(client_RC4_preferred_cipherstats[client_name]):
+        percent = round(client_RC4_preferred_cipherstats[client_name][stat] / total * 100, 4)
+        sys.stdout.write(stat.ljust(30) + " " + str(client_RC4_preferred_cipherstats[client_name][stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+    print("\n" + client_name + " incompatible ciphers    Count    Percent")
+    print("-----------------------------+---------+------")
+    for stat in sorted(client_incompatible_cipherstats[client_name]):
+        percent = round(client_incompatible_cipherstats[client_name][stat] / total * 100, 4)
+        sys.stdout.write(stat.ljust(30) + " " + str(client_incompatible_cipherstats[client_name][stat]).ljust(10) + str(percent).ljust(4) + "\n")
 
 print("\nSupported Handshakes      Count     Percent")
 print("-------------------------+---------+-------")
