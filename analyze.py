@@ -260,20 +260,20 @@ def evaluate_all(results):
     if len(results['ciphersuite']) == 0:
         return "no"
 
-    if is_modern(results):
-        status = "modern"
-    if not is_ordered(results, modern_ciphers, "modern"):
-        status = "modern with bad ordering"
+    if is_old(results):
+        status = "old"
+        if not is_ordered(results, old_ciphers, "old"):
+            status = "old with bad ordering"
 
     if is_intermediate(results):
         status = "intermediate"
-    if not is_ordered(results, intermediate_ciphers, "intermediate"):
-        status = "intermediate with bad ordering"
+        if not is_ordered(results, intermediate_ciphers, "intermediate"):
+            status = "intermediate with bad ordering"
 
-    if is_old(results):
-        status = "old"
-    if not is_ordered(results, old_ciphers, "old"):
-        status = "old with bad ordering"
+    if is_modern(results):
+        status = "modern"
+        if not is_ordered(results, modern_ciphers, "modern"):
+            status = "modern with bad ordering"
 
     if is_fubar(results):
         status = "bad"
