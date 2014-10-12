@@ -303,7 +303,7 @@ def process_results(data, level=None, do_json=False):
                 json_output['level'] = evaluate_all(results)
                 json_output['target_level'] = level
                 json_output['compliance'] = False
-                if json_output['level'] == json_output['target_level']:
+                if json_output['target_level'] in json_output['level']:
                     json_output['compliance'] = True
                 if operator:
                     json_output['operator'] = operator
