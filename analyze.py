@@ -320,7 +320,13 @@ def process_results(data, level=None, do_json=False):
                 if operator:
                     json_output['operator'] = operator
             else:
-                print(results['target'] + " has " + evaluate_all(results) + " ssl/tls")
+                measured_lvl = evaluate_all(results)
+                print(results['target'] + " has " + measured_lvl + " ssl/tls")
+                if level != 'none':
+                    if level in measured_lvl:
+                        print("and complies with the '" + level + "' level")
+                    else:
+                        print("and DOES NOT comply with the '" + level + "' level")
     except TypeError, e:
         return False
 
