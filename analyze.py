@@ -158,7 +158,7 @@ def is_intermediate(results):
     for proto in extra_proto:
         logging.debug("found protocol not wanted in the intermediate configuration:" + proto)
         failures[lvl].append('disable ' + proto)
-        modern = False
+        inter = False
     missing_proto = set(['TLSv1', 'TLSv1.1', 'TLSv1.2']) - set(all_proto)
     for proto in missing_proto:
         logging.debug("missing protocol wanted in the intermediate configuration:" + proto)
