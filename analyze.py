@@ -146,9 +146,10 @@ def is_intermediate(results):
         if conn['sigalg'][0] not in ['sha256WithRSAEncryption', 'sha384WithRSAEncryption', 'sha512WithRSAEncryption']:
             logging.debug(conn['sigalg'][0] + ' is a not an intermediate signature')
             has_sha256 = False
-        if conn['cipher'][0:2] == 'DHE':
-            if conn['pfs'] != 'DH,2048bits':
-                logging.debug(conn['pfs']+ ' is not a good DH parameters for the old configuration')
+        if 'DHE' in conn['cipher'][0:3]:
+            dhparam = conn['pfs'].split(',')[1].split('b')[0]
+            if int(dhparam) < 2048:
+                logging.debug(conn['pfs']+ ' is not a good DH parameters for the intermediate configuration')
                 inter = False
                 has_dhparam = False
         if conn['ocsp_stapling'] == 'False':
@@ -172,7 +173,7 @@ def is_intermediate(results):
     if not has_sha256:
         failures[lvl].append("consider using a SHA-256 certificate")
     if not has_dhparam:
-        failures[lvl].append("use a DH parameter of 2048 bits")
+        failures[lvl].append("use a DH parameter of 2048 bits or more")
         inter = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
@@ -201,10 +202,11 @@ def is_modern(results):
             logging.debug(conn['sigalg'][0] + ' is a not an modern signature')
             modern = False
             has_sha256 = False
-        if conn['cipher'][0:2] == 'DHE':
-            if conn['pfs'] != 'DH,2048bits':
-                logging.debug(conn['pfs']+ ' is not a good DH parameters for the old configuration')
-                inter = False
+        if 'DHE' in conn['cipher'][0:3]:
+            dhparam = conn['pfs'].split(',')[1].split('b')[0]
+            if int(dhparam) < 2048:
+                logging.debug(conn['pfs']+ ' is not a good DH parameters for the modern configuration')
+                modern = False
                 has_dhparam = False
         if conn['ocsp_stapling'] == 'False':
             has_ocsp = False
@@ -221,7 +223,7 @@ def is_modern(results):
         failures[lvl].append("use a SHA-256 certificate")
         modern = False
     if not has_dhparam:
-        failures[lvl].append("use a DH parameter of 2048 bits")
+        failures[lvl].append("use a DH parameter of 2048 bits or more")
         modern = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
