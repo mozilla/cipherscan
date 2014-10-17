@@ -143,7 +143,7 @@ def is_intermediate(results):
                 all_proto.append(proto)
         if 'TLSv1' in conn['protocols']:
             has_tls1 = True
-        if 'sha256WithRSAEncryption' not in conn['sigalg']:
+        if conn['sigalg'][0] not in ['sha256WithRSAEncryption', 'sha384WithRSAEncryption', 'sha512WithRSAEncryption']:
             logging.debug(conn['sigalg'][0] + ' is a not an intermediate signature')
             has_sha256 = False
         if conn['cipher'][0:2] == 'DHE':
@@ -197,9 +197,9 @@ def is_modern(results):
         for proto in conn['protocols']:
             if proto not in all_proto:
                 all_proto.append(proto)
-        if 'sha256WithRSAEncryption' not in conn['sigalg']:
-            logging.debug(conn['sigalg'][0] + ' is a not an intermediate signature')
-            inter = False
+        if conn['sigalg'][0] not in ['sha256WithRSAEncryption', 'sha384WithRSAEncryption', 'sha512WithRSAEncryption']:
+            logging.debug(conn['sigalg'][0] + ' is a not an modern signature')
+            modern = False
             has_sha256 = False
         if conn['cipher'][0:2] == 'DHE':
             if conn['pfs'] != 'DH,2048bits':
