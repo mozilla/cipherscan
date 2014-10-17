@@ -20,6 +20,7 @@ def is_fubar(results):
     has_wrong_pubkey = False
     has_md5_sig = False
     has_untrust_cert = False
+    has_wrong_dhparam = False
     fubar_ciphers = set(all_ciphers) - set(old_ciphers)
     for conn in results['ciphersuite']:
         if conn['cipher'] in fubar_ciphers:
@@ -34,6 +35,12 @@ def is_fubar(results):
             has_wrong_pubkey = True
             logging.debug(conn['pubkey'] + ' is a fubar pubkey size')
             fubar = True
+        if conn['pfs'] != 'None':
+            dhparam = conn['pfs'].split(',')[1].split('b')[0]
+            if int(dhparam) < 1024:
+                logging.debug(conn['pfs']+ ' is a fubar DH parameters')
+                fubar = True
+                has_wrong_dhparam = True
         if 'md5WithRSAEncryption' in conn['sigalg']:
             has_md5_sig = True
             logging.debug(conn['sigalg']+ ' is a fubar cert signature')
@@ -50,6 +57,8 @@ def is_fubar(results):
         failures[lvl].append("don't use a public key smaller than 2048 bits")
     if has_untrust_cert:
         failures[lvl].append("don't use an untrusted or self-signed certificate")
+    if has_wrong_dhparam:
+        failures[lvl].append("don't use a Diffie-Hellman parameter smaller than 1024 bits")
     return fubar
 
 # is_old assumes a configuration *is* old, and will return False if
@@ -85,8 +94,9 @@ def is_old(results):
             old = False
             has_sha1 = False
         # verify required pfs parameter is used
-        if conn['cipher'][0:2] == 'DHE':
-            if conn['pfs'] != 'DH,1024bits':
+        if conn['pfs'] != 'None':
+            dhparam = conn['pfs'].split(',')[1].split('b')[0]
+            if int(dhparam) != 1024:
                 logging.debug(conn['pfs']+ ' is not a good DH parameters for the old configuration')
                 old = False
                 has_dhparam = False
@@ -112,7 +122,7 @@ def is_old(results):
         failures[lvl].append("use a certificate with sha1WithRSAEncryption signature")
         old = False
     if not has_dhparam:
-        failures[lvl].append("use a DH parameter of 1024 bits")
+        failures[lvl].append("use a DH parameter of exactly 1024 bits")
         old = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
@@ -146,7 +156,7 @@ def is_intermediate(results):
         if conn['sigalg'][0] not in ['sha256WithRSAEncryption', 'sha384WithRSAEncryption', 'sha512WithRSAEncryption']:
             logging.debug(conn['sigalg'][0] + ' is a not an intermediate signature')
             has_sha256 = False
-        if 'DHE' in conn['cipher'][0:3]:
+        if conn['pfs'] != 'None':
             dhparam = conn['pfs'].split(',')[1].split('b')[0]
             if int(dhparam) < 2048:
                 logging.debug(conn['pfs']+ ' is not a good DH parameters for the intermediate configuration')
@@ -202,7 +212,7 @@ def is_modern(results):
             logging.debug(conn['sigalg'][0] + ' is a not an modern signature')
             modern = False
             has_sha256 = False
-        if 'DHE' in conn['cipher'][0:3]:
+        if conn['pfs'] != 'None':
             dhparam = conn['pfs'].split(',')[1].split('b')[0]
             if int(dhparam) < 2048:
                 logging.debug(conn['pfs']+ ' is not a good DH parameters for the modern configuration')
