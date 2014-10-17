@@ -249,6 +249,7 @@ display_results_in_terminal() {
     local tickethint
     local ocspstaple
     local different=False
+    echo "Target: $TARGET"; echo
     for cipher in "${cipherspref[@]}"; do
         pciph=$(echo $cipher|awk '{print $1}')
         if [ $DOBENCHMARK -eq 1 ]; then
