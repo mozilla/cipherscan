@@ -177,7 +177,6 @@ def is_intermediate(results):
         if conn['pfs'] != 'None':
             if not has_good_pfs(conn['pfs'], 2048, 256):
                 logging.debug(conn['pfs']+ ' is not a good PFS parameter for the intermediate configuration')
-                inter = False
                 has_pfs = False
         if conn['ocsp_stapling'] == 'False':
             has_ocsp = False
@@ -200,8 +199,7 @@ def is_intermediate(results):
     if not has_sha256:
         failures[lvl].append("consider using a SHA-256 certificate")
     if not has_pfs:
-        failures[lvl].append("use DHE of at least 2048bits and ECC or at least 256bits")
-        inter = False
+        failures[lvl].append("consider using DHE of at least 2048bits and ECC of at least 256bits")
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
     if results['serverside'] != 'True':
@@ -249,7 +247,7 @@ def is_modern(results):
         failures[lvl].append("use a SHA-256 certificate")
         modern = False
     if not has_pfs:
-        failures[lvl].append("use DHE of at least 2048bits and ECC or at least 256bits")
+        failures[lvl].append("use DHE of at least 2048bits and ECC of at least 256bits")
         modern = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
@@ -352,7 +350,7 @@ def process_results(data, level=None, do_json=False):
         return True
 
     if len(failures['fubar']) > 0:
-        print("\nThings that are really FUBAR:")
+        print("\nThings that are bad:")
         for failure in failures['fubar']:
             print("* " + failure)
 
