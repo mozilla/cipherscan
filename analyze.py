@@ -56,7 +56,7 @@ def is_fubar(results):
             logging.debug(conn['pubkey'] + ' is a fubar pubkey size')
             fubar = True
         if conn['pfs'] != 'None':
-            if not has_good_pfs(conn['pfs'], 1024, 128):
+            if not has_good_pfs(conn['pfs'], 1024, 160):
                 logging.debug(conn['pfs']+ ' is a fubar PFS parameters')
                 fubar = True
                 has_wrong_pfs = True
@@ -77,7 +77,7 @@ def is_fubar(results):
     if has_untrust_cert:
         failures[lvl].append("don't use an untrusted or self-signed certificate")
     if has_wrong_pfs:
-        failures[lvl].append("don't use DHE smaller than 1024bits or ECC smaller than 128bits")
+        failures[lvl].append("don't use DHE smaller than 1024bits or ECC smaller than 160bits")
     return fubar
 
 # is_old assumes a configuration *is* old, and will return False if
