@@ -373,8 +373,9 @@ for r,d,flist in os.walk(path):
             if client_compat[client_name]:
                 if 'ECDHE' in client_selected[client_name]:
                     client_selected_cipherstats[client_name]['x:ECDHE'] += 1
-                elif 'DHE' in client_selected[client_name]:
-                    client_selected_cipherstats[client_name]['x:DHE'] += 1
+                elif 'DHE' in client_selected[client_name] or \
+                    'EDH' in client_selected[client_name]:
+                        client_selected_cipherstats[client_name]['x:DHE'] += 1
                 else:
                     client_selected_cipherstats[client_name]['x:kRSA'] += 1
 
