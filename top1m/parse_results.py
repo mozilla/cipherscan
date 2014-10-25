@@ -276,7 +276,8 @@ for r,d,flist in os.walk(path):
         """ done with this file, storing the stats """
         if DHE or ECDHE:
             pfsstats['Support PFS'] += 1
-            if 'DHE-' in results['ciphersuite'][0]['cipher']:
+            if 'DHE-' in results['ciphersuite'][0]['cipher'] or \
+                    'EDH-' in results['ciphersuite'][0]['cipher']:
                 pfsstats['Prefer PFS'] += 1
                 pfsstats['Prefer ' + results['ciphersuite'][0]['pfs']] += 1
             for s in temppfsstats:
