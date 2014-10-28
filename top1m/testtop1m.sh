@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 parallel=10
 max_bg=50
-absolute_max_bg=100
+absolute_max_bg=400
 max_load_avg=50
 
 if [ $(ulimit -u) -lt $((10*absolute_max_bg)) ]; then
@@ -32,7 +32,7 @@ function scan_host() {
     if [ $? -gt 0 ]; then
         return
     fi
-    ../cipherscan -json -servername $1 $2:443 > results/$1@$2
+    ../cipherscan --delay 2 -json -servername $1 $2:443 > results/$1@$2
 }
 
 function scan_host_no_sni() {
@@ -44,7 +44,7 @@ function scan_host_no_sni() {
     if [ $? -gt 0 ]; then
         return
     fi
-    ../cipherscan -json $1:443 > results/$1
+    ../cipherscan --delay 2 -json $1:443 > results/$1
 }
 
 function scan_hostname() {
