@@ -43,7 +43,7 @@ VERBOSE=0
 DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
-TIMEOUT=10
+TIMEOUT=30
 # place where to put the found intermediate CA certificates and where
 # trust anchors are stored
 CAPATH=""
