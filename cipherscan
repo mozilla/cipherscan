@@ -43,10 +43,18 @@ VERBOSE=0
 DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
-TIMEOUT=10
+TIMEOUT=30
 # place where to put the found intermediate CA certificates and where
 # trust anchors are stored
 CAPATH=""
+
+# because running external commands like sleep incurs a fork penalty, we
+# first check if it is necessary
+ratelimit() {
+    if [[ $DELAY != "0" ]]; then
+        sleep $DELAY
+    fi
+}
 
 usage() {
     echo -e "usage: $0 [-a|--allciphers] [-b|--benchmark] [--capath directory] [-d|--delay seconds] [-D|--debug] [-j|--json] [-v|--verbose] [-o|--openssl file] [openssl s_client args] <target:port>
@@ -109,6 +117,7 @@ test_cipher_on_target() {
         else
             cmnd=$sslcommand
         fi
+        ratelimit
         debug echo \"Q\" \| $cmnd $tls_version
         local tmp=$(echo "Q" | $cmnd $tls_version 1>/dev/stdout 2>/dev/null)
         if grep 'OCSP Response Data' <<<"$tmp" >/dev/null; then
@@ -237,7 +246,6 @@ get_cipher_pref() {
         get_cipher_pref "!$pciph:$ciphersuite"
         return 0
     fi
-    sleep $DELAY
 }
 
 display_results_in_terminal() {
@@ -521,7 +529,5 @@ if [ $ALLCIPHERS -gt 0 ]; then
             r="pass"
         fi
         echo "$c $r"|awk '{printf "%-35s %s\n",$1,$2}'
-        debug "Sleeping for $DELAY."
-        sleep $DELAY
     done
 fi
