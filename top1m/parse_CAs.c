@@ -18,6 +18,23 @@
 #include <openssl/err.h>
 #include <json-c/json.h>
 
+#define MAX(a,b) \
+    ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+       _a > _b ? _a : _b; })
+
+#ifndef X509_V_FLAG_TRUSTED_FIRST
+/*
+ * OpenSSL implements the same chain building logic as does NSS but it doesn't
+ * use it by default, it's also not available in stock 1.0.1 but is backported
+ * for example on Fedora
+ */
+#warning "X509_V_FLAG_TRUSTED_FIRST not available, chain creation will be unreliable"
+#define X509_V_FLAG_TRUSTED_FIRST 0
+#endif
+
+#define MAX_BUFFER_SIZE 8192
+
 static char* CA_TRUSTED = "./ca_trusted";
 static char* CA_ALL = "./ca_files";
 static char* CERTS_DIR = "./certs";
@@ -51,20 +68,33 @@ char *hash_to_filename(const char *hash)
 {
     char *tmp_f_name;
     size_t n;
+    int ret;
 
-    n = strlen(hash) + 30;
+    n = strlen(hash) + MAX(MAX(strlen(CA_TRUSTED), strlen(CA_ALL)),
+            strlen(CERTS_DIR)) + 1 + // slash in name
+            strlen(".pem") + 1;
 
-    // TODO error checking
     tmp_f_name = malloc(n);
+    if (!tmp_f_name) {
+        fprintf(stderr, "Out of memory (line %i)\n", __LINE__);
+        abort();
+    }
 
     /* first check if the file is in directory with regular certs */
-    // TODO error checking
-    snprintf(tmp_f_name, n, "%s/%s.pem", CERTS_DIR, hash);
+    ret = snprintf(tmp_f_name, n, "%s/%s.pem", CERTS_DIR, hash);
+    if (ret >= n) {
+        fprintf(stderr, "Out of buffer space (line %i)\n", __LINE__);
+        abort();
+    }
     if (access(tmp_f_name, F_OK) != -1) {
         return tmp_f_name;
     }
 
-    snprintf(tmp_f_name, n, "%s/%s.pem", CA_ALL, hash);
+    ret = snprintf(tmp_f_name, n, "%s/%s.pem", CA_ALL, hash);
+    if (ret >= n) {
+        fprintf(stderr, "Out of buffer space (line %i)\n", __LINE__);
+        abort();
+    }
     if (access(tmp_f_name, F_OK) != -1) {
         return tmp_f_name;
     }
@@ -294,7 +324,10 @@ int register_known_chains(struct json_object ***known, struct json_object *new)
 
     // add it to known objects
     *known = realloc(*known, sizeof(struct json_object **)*(i+2));
-    // TODO handle errors
+    if (!*known) {
+        fprintf(stderr, "Out of memory (line %i)\n", __LINE__);
+        abort();
+    }
     (*known)[i] = new;
     (*known)[i+1] = NULL;
     return 0;
@@ -307,7 +340,7 @@ struct json_object *read_json_from_file(char *filename)
     struct json_object *obj = NULL;
     int ret = 0;
     int rc;
-    size_t len = 8192;
+    size_t len = MAX_BUFFER_SIZE;
     char buffer[len];
     char *start;
     int i;
@@ -343,7 +376,6 @@ struct json_object *read_json_from_file(char *filename)
     }
 
 tok_free:
-
     json_tokener_free(tok);
 
 close_fd:
@@ -400,7 +432,9 @@ int process_host_results(char *filename)
     int first_printed=0;
     for(int i=0; i < json_object_array_length(ciphers); i++) {
         current = json_object_array_get_idx(ciphers, i);
-        //printf("\t[%i]:\n", i);
+#ifdef DEBUG
+        printf("\t[%i]:\n", i);
+#endif
         j_rc = json_object_object_get_ex(current, "certificates", &certificates);
         if (j_rc == FALSE)
             continue;
@@ -410,10 +444,14 @@ int process_host_results(char *filename)
         int j;
         for (j=0; j < json_object_array_length(certificates); j++) {
             certs[j] = json_object_get_string(json_object_array_get_idx(certificates, j));
-            //printf("\t\t\t%s\n", certs[j]);
+#ifdef DEBUG
+            printf("\t\t\t%s\n", certs[j]);
+#endif
         }
         rc = register_known_chains(&known_chains, certificates);
-        //printf("\t\t%i\n", rc);
+#ifdef DEBUG
+        printf("\t\t%i\n", rc);
+#endif
 
         if (rc == 0 && j > 0) {
             if (first_printed != 0)
@@ -425,11 +463,13 @@ int process_host_results(char *filename)
             }
         }
 
-        // DEBUG, print whole json "object" object
-        //json_object_object_foreach(current, key, val) {
-        //    str = json_object_to_json_string(val);
-        //    printf("\t\t%s: %s\n", key, str);
-        //}
+#ifdef DEBUG
+        // print whole json "object" object
+        json_object_object_foreach(current, key, val) {
+            str = json_object_to_json_string(val);
+            printf("\t\t%s: %s\n", key, str);
+        }
+#endif
 
         free(certs);
     }
@@ -450,7 +490,7 @@ int main(int argc, char** argv)
     DIR *dirp;
     struct dirent *direntp;
 
-    char buffer[8192] = {};
+    char buffer[MAX_BUFFER_SIZE] = {};
 
     SSL_load_error_strings();
     SSL_library_init();
@@ -488,7 +528,11 @@ int main(int argc, char** argv)
         if (strcmp(direntp->d_name, "..") == 0)
             continue;
 
-        snprintf(buffer, 8191, "results/%s", direntp->d_name);
+        ret = snprintf(buffer, MAX_BUFFER_SIZE-1, "results/%s", direntp->d_name);
+        if (ret >= MAX_BUFFER_SIZE-1) {
+            fprintf(stderr, "Out of buffer space (line %i)\n", __LINE__);
+            abort();
+        }
 
         ret = process_host_results(buffer);
         if (ret == 1) {
