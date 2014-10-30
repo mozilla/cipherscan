@@ -65,7 +65,7 @@ def get_path_for_hash(cert_hash):
             return None
     return f_name
 
-""" convert RSA and DSA key sizes to estimated Level of security """
+""" convert RSA and DSA key sizes to estimated Level of Security """
 def rsa_key_size_to_los(size):
     if size < 760:
         return 40
@@ -84,6 +84,7 @@ def rsa_key_size_to_los(size):
     else:
         return 256
 
+""" convert signature algotihm to estimated Level of Security """
 def sig_alg_to_los(name):
     if 'MD5' in name.upper():
         return 64
@@ -119,6 +120,8 @@ def collect_key_sizes(file_names):
         keysize['DSA ' + str(pubkey.bits())] += 1
         tmp_keysize['DSA ' + str(pubkey.bits())] = 1
         security_level = rsa_key_size_to_los(pubkey.bits())
+    # following 408 should be crypto.TYPE_ECDSA, but even new(ish) version
+    # of OpenSSL Python module don't define it
     elif pubkey.type() == 408:
         keysize['ECDSA ' + str(pubkey.bits())] += 1
         tmp_keysize['ECDSA ' + str(pubkey.bits())] = 1
