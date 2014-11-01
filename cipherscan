@@ -195,6 +195,8 @@ declare -A sigalgs_fallback
 # array with preferred sigalgs for aRSA and aECDSA ciphers
 declare -a sigalgs_preferred_rsa
 declare -a sigalgs_preferred_ecdsa
+renegotiation=""
+compression=""
 
 # because running external commands like sleep incurs a fork penalty, we
 # first check if it is necessary
@@ -359,6 +361,8 @@ parse_openssl_output() {
     current_pubkey=0
     current_trusted="False"
     current_sigalg="None"
+    current_renegotiation="False"
+    current_compression=""
 
     certs_found=0
     current_raw_certificates=()
@@ -386,6 +390,19 @@ parse_openssl_output() {
             local match=($line)
             current_cipher="${match[4]}"
             continue
+        fi
+
+        # renegotiation support
+        if [[ $line =~ Secure\ Renegotiation\ IS\ supported ]]; then
+            current_renegotiation="secure"
+        fi
+        if [[ $line =~ Secure\ Renegotiation\ IS\ NOT\ supported ]]; then
+            current_renegotiation="insecure"
+        fi
+
+        # compression settings
+        if [[ $line =~ Compression:\ (.*) ]]; then
+            current_compression="${BASH_REMATCH[1]}"
         fi
 
         # extract the signing algorithm used in TLSv1.2 ephemeral kex
@@ -840,6 +857,26 @@ display_results_in_terminal() {
         fi
         echo -e "Curves ordering: $curvesordering - fallback: $fallback_supported"
     fi
+    if [[ $renegotiation ]]; then
+        if [[ $renegotiation == "secure" ]]; then
+            echo -e "Server ${c_green}supports${c_reset} secure renegotiation"
+        else
+            echo -e "Server ${c_red}DOESN'T${c_reset} support secure renegotiation"
+        fi
+    else
+        echo "Renegotiation test error"
+    fi
+    if [[ $compression ]]; then
+        if [[ $compression != "NONE" ]]; then
+            color="${c_red}"
+        else
+            color="${c_green}"
+        fi
+        echo -e "Server supported compression methods:" \
+            "${color}$compression${c_reset}"
+    else
+        echo -e "Supported compression methods ${c_red}test error${c_reset}"
+    fi
 
     if [[ $TEST_KEX_SIGALG == "True" ]]; then
         echo
@@ -946,6 +983,18 @@ display_results_in_json() {
     echo -n ']'
     if [[ $TEST_CURVES == "True" ]]; then
         echo -n ",\"curves_fallback\":\"$fallback_supported\""
+    fi
+
+    if [[ $renegotiation ]]; then
+        echo -n ",\"renegotiation\":\"$renegotiation\""
+    else
+        echo -n ",\"renegotiation\":\"False\""
+    fi
+
+    if [[ $compression ]]; then
+        echo -n ",\"compression\":\"$compression\""
+    else
+        echo -n ",\"compression\":\"False\""
     fi
 
     if [[ $TEST_KEX_SIGALG == "True" ]]; then
@@ -1260,6 +1309,16 @@ test_tls_tolerance() {
                 tls_tolerance[$version]="False"
         else
             tls_tolerance[$version]="True $current_protocol $current_cipher $current_trusted"
+
+            # collect renegotiation info
+            if [[ $current_renegotiation != "False" ]]; then
+                renegotiation="$current_renegotiation"
+            fi
+
+            # collect compression info
+            if [[ $version == "big-TLSv1.2" || -z $compression ]]; then
+                compression="$current_compression"
+            fi
         fi
     done
 
