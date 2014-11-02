@@ -4,9 +4,9 @@ A very simple way to find out which SSL/TLS ciphersuites are supported by a targ
 
 Cipherscan tests the ordering of the SSL/TLS ciphers on a given target, for all major versions of SSL and TLS. It also extracts some certificates informations. Cipherscan uses the `openssl s_client` command line to run the tests.
 
-On Linux x86_64 run: ./cipherscan www.google.com:443
+On Linux x86_64 run: dos2unix ./cipherscan www.google.com:443
 On any other *nix or *tux run: ./cipherscan -o /path/to/openssl www.google.com:443
-and watch.
+and watch. (You may need to run 'dos2unix ./cipherscan' first to convert line-endings in the file)
 
 The newer your version of openssl, the better results you'll get. Versions
 of OpenSSL below 1.0.1 don't support TLS1.2 ciphers, elliptic curves, etc... Build your own or test what your system's OpenSSL supports.
