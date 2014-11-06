@@ -63,6 +63,32 @@ fi
 # RSA ciphers are put at the end to force Google servers to accept ECDSA ciphers
 # (probably a result of a workaround for the bug in Apple implementation of ECDSA)
 CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
+# some servers are intolerant to large client hello, try a shorter list of
+# ciphers with them
+SHORTCIPHERSUITE=('ECDHE-ECDSA-AES128-GCM-SHA256'
+        'ECDHE-RSA-AES128-GCM-SHA256'
+        'ECDHE-RSA-AES256-GCM-SHA384'
+        'ECDHE-ECDSA-AES256-SHA'
+        'ECDHE-ECDSA-AES128-SHA'
+        'ECDHE-RSA-AES128-SHA'
+        'ECDHE-RSA-AES256-SHA'
+        'ECDHE-RSA-DES-CBC3-SHA'
+        'ECDHE-ECDSA-RC4-SHA'
+        'ECDHE-RSA-RC4-SHA'
+        'DHE-RSA-AES128-SHA'
+        'DHE-DSS-AES128-SHA'
+        'DHE-RSA-CAMELLIA128-SHA'
+        'DHE-RSA-AES256-SHA'
+        'DHE-DSS-AES256-SHA'
+        'DHE-RSA-CAMELLIA256-SHA'
+        'EDH-RSA-DES-CBC3-SHA'
+        'AES128-SHA'
+        'CAMELLIA128-SHA'
+        'AES256-SHA'
+        'CAMELLIA256-SHA'
+        'DES-CBC3-SHA'
+        'RC4-SHA'
+        'RC4-MD5')
 # as some servers are intolerant to large client hello's (or ones that have
 # RC4 ciphers below position 64), use the following for cipher testing in case
 # of problems
@@ -119,6 +145,8 @@ unset known_certs
 declare -A known_certs
 unset cert_checksums
 declare -A cert_checksums
+# array with results of tolerance scans (TLS version, extensions, etc.)
+declare -A tls_tolerance
 
 # because running external commands like sleep incurs a fork penalty, we
 # first check if it is necessary
@@ -685,6 +713,17 @@ display_results_in_terminal() {
         echo "Curves ordering: $curvesordering"
         echo "Curves fallback: $fallback_supported"
     fi
+
+    echo
+    echo "Fallbacks required:"
+    for test_name in "${!tls_tolerance[@]}"; do
+        if [[ ${tls_tolerance[$test_name]} == "False" ]]; then
+            echo "$test_name config not supported, connection failed"
+        else
+            local res=(${tls_tolerance[$test_name]})
+            echo "$test_name no fallback req, connected: ${res[1]} ${res[2]}"
+        fi
+    done | sort
 }
 
 display_results_in_json() {
@@ -722,7 +761,22 @@ display_results_in_json() {
     if [ $TEST_CURVES == "True" ]; then
         echo -n ",\"curves_fallback\":\"$fallback_supported\""
     fi
-    echo '}'
+    echo -n ',"configs":{'
+    ctr=0
+    for test_name in "${!tls_tolerance[@]}"; do
+        local result=(${tls_tolerance[$test_name]})
+        [ $ctr -gt 0 ] && echo -n ","
+        echo -n "\"$test_name\":{"
+        if [[ ${result[0]} == "False" ]]; then
+            echo -n "\"tolerant\":\"False\""
+        else
+            echo -n "\"tolerant\":\"True\",\"proto\":\"${result[1]}\","
+            echo -n "\"cipher\":\"${result[2]}\",\"trusted\":\"${result[3]}\""
+        fi
+        echo -n "}"
+        ctr=$((ctr+1))
+    done
+    echo '}}'
 }
 
 test_serverside_ordering() {
@@ -977,6 +1031,212 @@ test_curves_fallback() {
     done
 }
 
+test_tls_tolerance() {
+
+    #
+    # first test general version tolerance with all we've got (full list of
+    # curves, full list of ciphers, NPN, ALPN
+    #
+    declare -A tls_vers_tests
+    tls_vers_tests['big-TLSv1.2']=""
+    tls_vers_tests['big-TLSv1.1']="-no_tls1_2"
+    tls_vers_tests['big-TLSv1.0']="-no_tls1_2 -no_tls1_1"
+    tls_vers_tests['big-SSLv3']="-no_tls1_2 -no_tls1_1 -no_tls1"
+
+    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+    sslcommand+=" -status -nextprotoneg 'http/1.1'"
+    sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $CIPHERSUITE"
+
+    for version in "${!tls_vers_tests[@]}"; do
+        ratelimit
+        verbose "Testing fallback with $sslcommand ${tls_vers_tests[$version]}"
+        local tmp=$(echo Q | $sslcommand ${tls_vers_tests[$version]} 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == '0000' ]]; then
+                tls_tolerance[$version]="False"
+        else
+            tls_tolerance[$version]="True $current_protocol $current_cipher $current_trusted"
+        fi
+    done
+
+    # if TLS1.2 didn't succeeded, try different fallbacks
+    if [[ ${tls_tolerance['big-TLSv1.2']} == "False" ]]; then
+        #
+        # Try big client hello, but with a version 2 compatible format
+        # (openssl automatically does that when there are SSLv2 ciphers in
+        # cipher string and no options are specified)
+        #
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        if [ -n "$CAPATH" ]; then
+            sslcommand+=" -CApath $CAPATH -showcerts"
+        elif [ -e "$CACERTS" ]; then
+            sslcommand+=" -CAfile $CACERTS"
+        fi
+        sslcommand+=" -connect $TARGET -cipher $CIPHERSUITE"
+
+        ratelimit
+        verbose "Testing fallback with $sslcommand"
+        local tmp=$(echo Q | $sslcommand 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == '0000' ]]; then
+                tls_tolerance['v2-big-TLSv1.2']="False"
+        else
+            tls_tolerance['v2-big-TLSv1.2']="True $current_protocol $current_cipher $current_trusted"
+        fi
+
+        #
+        # try a smaller, but still v2 compatible Client Hello
+        #
+        OLDIFS="$IFS"
+        IFS=":"
+        local ciphers="${SHORTCIPHERSUITE[*]}"
+        IFS="$OLDIFS"
+
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        if [ -n "$CAPATH" ]; then
+            sslcommand+=" -CApath $CAPATH -showcerts"
+        elif [ -e "$CACERTS" ]; then
+            sslcommand+=" -CAfile $CACERTS"
+        fi
+        sslcommand+=" -connect $TARGET -cipher $ciphers"
+
+        ratelimit
+        verbose "Testing fallback with $sslcommand"
+        local tmp=$(echo Q | $sslcommand 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == '0000' ]]; then
+                tls_tolerance['v2-small-TLSv1.2']="False"
+        else
+            tls_tolerance['v2-small-TLSv1.2']="True $current_protocol $current_cipher $current_trusted"
+        fi
+
+        #
+        # v2, small but with TLS1.1 as max version
+        #
+        ratelimit
+        verbose "Testing fallback with $sslcommand -no_tls1_2"
+        local tmp=$(echo Q | $sslcommand -no_tls1_2 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == '0000' ]]; then
+                tls_tolerance['v2-small-TLSv1.1']="False"
+        else
+            tls_tolerance['v2-small-TLSv1.1']="True $current_protocol $current_cipher $current_trusted"
+        fi
+
+        #
+        # v2, small but with TLS1.0 as max version
+        #
+        ratelimit
+        verbose "Testing fallback with $sslcommand -no_tls1_2 -no_tls1_1"
+        local tmp=$(echo Q | $sslcommand -no_tls1_2 -no_tls1_1 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == '0000' ]]; then
+                tls_tolerance['v2-small-TLSv1.0']="False"
+        else
+            tls_tolerance['v2-small-TLSv1.0']="True $current_protocol $current_cipher $current_trusted"
+        fi
+
+        #
+        # v2, small but with SSLv3 as max version
+        #
+        ratelimit
+        verbose "Testing fallback with $sslcommand -no_tls1_2 -no_tls1_1 -no_tls1"
+        local tmp=$(echo Q | $sslcommand -no_tls1_2 -no_tls1_1 -no_tls1 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == '0000' ]]; then
+                tls_tolerance['v2-small-SSLv3']="False"
+        else
+            tls_tolerance['v2-small-SSLv3']="True $current_protocol $current_cipher $current_trusted"
+        fi
+
+
+        #
+        # use v3 format TLSv1.2 hello, small cipher list
+        #
+        OLDIFS="$IFS"
+        IFS=":"
+        local ciphers="${SHORTCIPHERSUITE[*]}"
+        IFS="$OLDIFS"
+
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        if [ -n "$CAPATH" ]; then
+            sslcommand+=" -CApath $CAPATH -showcerts"
+        elif [ -e "$CACERTS" ]; then
+            sslcommand+=" -CAfile $CACERTS"
+        fi
+        sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $ciphers:!SSLv2"
+
+        ratelimit
+        verbose "Testing fallback with $sslcommand"
+        local tmp=$(echo Q | $sslcommand 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == '0000' ]]; then
+                tls_tolerance['small-TLSv1.2']="False"
+        else
+            tls_tolerance['small-TLSv1.2']="True $current_protocol $current_cipher $current_trusted"
+        fi
+
+        #
+        # v3 format TLSv1.1 hello, small cipher list
+        #
+        ratelimit
+        verbose "Testing fallback with $sslcommand -no_tls1_2"
+        local tmp=$(echo Q | $sslcommand -no_tls1_2 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == '0000' ]]; then
+                tls_tolerance['small-TLSv1.1']="False"
+        else
+            tls_tolerance['small-TLSv1.1']="True $current_protocol $current_cipher $current_trusted"
+        fi
+
+        #
+        # v3 format TLSv1.0 hello, small cipher list
+        #
+        ratelimit
+        verbose "Testing fallback with $sslcommand -no_tls1_2 -no_tls1_1"
+        local tmp=$(echo Q | $sslcommand -no_tls1_2 -no_tls1_1 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == '0000' ]]; then
+                tls_tolerance['small-TLSv1.0']="False"
+        else
+            tls_tolerance['small-TLSv1.0']="True $current_protocol $current_cipher $current_trusted"
+        fi
+
+        #
+        # v3 format SSLv3 hello, small cipher list
+        #
+        ratelimit
+        verbose "Testing fallback with $sslcommand -no_tls1_2 -no_tls1_1 -no_tls1"
+        local tmp=$(echo Q | $sslcommand -no_tls1_2 -no_tls1_1 -no_tls1 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == '0000' ]]; then
+                tls_tolerance['small-SSLv3']="False"
+        else
+            tls_tolerance['small-SSLv3']="True $current_protocol $current_cipher $current_trusted"
+        fi
+    fi
+}
+
 # If no options are given, give usage information and exit (with error code)
 if [ $# -eq 0 ]; then
    usage;
@@ -1119,6 +1379,8 @@ if [[ ${#cipherspref[@]} -eq 0 ]] || [[ ${pref[1]} == "SSLv2" ]]; then
     IFS="$OLDIFS"
     get_cipher_pref "$CIPHERS"
 fi
+
+test_tls_tolerance
 
 test_serverside_ordering
 
