@@ -72,6 +72,9 @@ handshakestats = defaultdict(int)
 keysize = defaultdict(int)
 sigalg = defaultdict(int)
 tickethint = defaultdict(int)
+eccfallback = defaultdict(int)
+eccordering = defaultdict(int)
+ecccurve = defaultdict(int)
 ocspstaple = defaultdict(int)
 dsarsastack = 0
 total = 0
@@ -86,6 +89,9 @@ for r,d,flist in os.walk(path):
         tempdsakeystats = {}
         tempsigstats = {}
         tempticketstats = {}
+        tempeccfallback = "unknown"
+        tempeccordering = "unknown"
+        tempecccurve = {}
         """ supported ciphers by the server under scan """
         tempcipherstats = {}
         ciphertypes = 0
@@ -140,6 +146,17 @@ for r,d,flist in os.walk(path):
             """ discard files with empty results """
             if len(results['ciphersuite']) < 1:
                 continue
+
+            """ save ECC curve stats """
+            if 'curve_fallback' in results:
+                tempeccfallback = results['curve_fallback']
+            if 'curve_ordering' in results:
+                tempeccordering = results['curve_ordering']
+            if 'curve' in results:
+                for curve in results['curve']:
+                    tempecccurve[curve] = 1
+                if len(results['curve']) == 1:
+                    tempecccurve[curve + ' Only'] = 1
 
             """ loop over list of ciphers """
             for entry in results['ciphersuite']:
@@ -329,6 +346,11 @@ for r,d,flist in os.walk(path):
         for s in tempticketstats:
             tickethint[s] += 1
 
+        eccfallback[tempeccfallback] += 1
+        eccordering[tempeccordering] += 1
+        for s in tempecccurve:
+            ecccurve[s] += 1
+
         if ocsp_stapling is None:
             ocspstaple['Unknown'] += 1
         elif ocsp_stapling:
@@ -517,6 +539,24 @@ for stat in sorted(pfsstats):
     elif "DH," in stat:
         pfspercent = round(pfsstats[stat] / handshakestats['DHE'] * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(pfsstats[stat]).ljust(10) + str(percent).ljust(9) + str(pfspercent) + "\n")
+
+print("\nSupported ECC curves      Count     Percent ")
+print("-------------------------+---------+--------")
+for stat in sorted(ecccurve):
+    percent = round(ecccurve[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(ecccurve[stat]).ljust(10) + str(percent).ljust(9) + "\n")
+
+print("\nUnsupported curve fallback     Count     Percent ")
+print("------------------------------+---------+--------")
+for stat in sorted(eccfallback):
+    percent = round(eccfallback[stat] / total * 100,4)
+    sys.stdout.write(stat.ljust(30) + " " + str(eccfallback[stat]).ljust(10) + str(percent).ljust(9) + "\n")
+
+print("\nECC curve ordering        Count     Percent ")
+print("-------------------------+---------+--------")
+for stat in sorted(eccordering):
+    percent = round(eccordering[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(eccordering[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
 print("\nTLS session ticket hint   Count     Percent ")
 print("-------------------------+---------+--------")
