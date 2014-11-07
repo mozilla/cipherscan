@@ -874,6 +874,16 @@ display_results_in_terminal() {
                 echo "server forces ${sigalgs_fallback[$auth]} with $auth"
             fi
         done
+        if [[ ${sigalgs_ordering} == "server" ]]; then
+            echo -e "${c_green}Server side sigalg ordering${c_reset}"
+        elif [[ ${sigalgs_ordering} == "client" ]]; then
+            echo -e "${c_red}Client side sigalg ordering${c_reset}"
+        elif [[ ${sigalgs_ordering} == "unsupported" ]]; then
+            # do nothing - messages above will report that it's unsupported
+            echo -n
+        else
+            echo "Ordering test failure: ${sigalgs_ordering}"
+        fi
 
         if [[ ${#sigalgs_preferred_ecdsa[@]} -gt 0 ]]; then
             echo
@@ -955,6 +965,7 @@ display_results_in_json() {
 
     if [[ $TEST_KEX_SIGALG == "True" ]]; then
         echo -n ',"sigalgs":{'
+        echo -n "\"ordering\":\"${sigalgs_ordering}\","
         echo -n "\"ECDSA-fallback\":\"${sigalgs_fallback[ECDSA]}\","
         echo -n "\"RSA-fallback\":\"${sigalgs_fallback[RSA]}\""
         if [[ ${#sigalgs_preferred_ecdsa[@]} -gt 0 ]]; then
@@ -1660,6 +1671,109 @@ test_kex_sigalgs() {
             [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
         done
     fi
+
+    #
+    # test which ordering is preferred, server or client
+    #
+    if [[ ${#sigalgs_preferred_rsa[@]} -eq 0 \
+        && ${#sigalgs_preferred_ecdsa[@]} -eq 0 ]]; then
+        sigalgs_ordering="unsupported"
+    elif [[ ${#sigalgs_preferred_rsa[@]} -le 1 \
+        && ${#sigalgs_preferred_ecdsa[@]} -le 1 ]]; then
+        # if there is just one hash for each signature algorithm, that means
+        # the server essentially forces the signature algorithm on client
+        sigalgs_ordering="server"
+    elif [[ ${#sigalgs_preferred_ecdsa[@]} -gt 1 ]]; then
+        # in case server supports multiple ECDSA sigalgs, test just those,
+        # even if it supports RSA (since those are more important)
+
+        # completely rotate order check if negotiated changes
+        local test_sigalgs=""
+        local i
+        for ((i=${#sigalgs_preferred_ecdsa[@]}-1; i>0; i--)); do
+            test_sigalgs+="ECDSA+${sigalgs_preferred_ecdsa[$i]}:"
+        done
+        test_sigalgs+="ECDSA+${sigalgs_preferred_ecdsa[0]}"
+
+        # prepare the command to run
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        if [ -n "$CAPATH" ]; then
+            sslcommand+=" -CApath $CAPATH -showcerts"
+        elif [ -e "$CACERTS" ]; then
+            sslcommand+=" -CAfile $CACERTS"
+        fi
+        sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $supported_ecdsa_ciphers"
+        # since some ciphers supported by server may be SSLv2 only, we need to
+        # force use of TLSv1.2, otherwise openssl will send a SSLv2 compatible
+        # client hello
+        sslcommand+=" -no_ssl2 -no_ssl3"
+
+        ratelimit
+        verbose "Test ordering of sigalgs with $sslcommand -sigalgs $test_sigalgs"
+        local tmp=$(echo Q | $sslcommand -sigalgs $test_sigalgs 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "server selected $current_cipher, $current_protocol, $current_kex_sigalg"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == "0000" ]]; then
+            sigalgs_ordering="intolerant"
+        elif [[ -z $current_kex_sigalg ]] || [[ ! $current_cipher =~ DHE-ECDSA ]]; then
+            sigalgs_ordering="order-fallback"
+        else
+            if [[ ${sigalgs_preferred_ecdsa[0]} == $current_kex_sigalg ]]; then
+                sigalgs_ordering="server"
+            elif [[ ${sigalgs_preferred_ecdsa[${#sigalgs_preferred_ecdsa[@]}-1]} \
+                == $current_kex_sigalg ]]; then
+                sigalgs_ordering="client"
+            else
+                sigalgs_ordering="indeterminate"
+            fi
+        fi
+    else
+        # test ordering with RSA ciphers
+
+        # completely rotate order check if negotiated changes
+        local test_sigalgs=""
+        local i
+        for ((i=${#sigalgs_preferred_rsa[@]}-1; i>0; i--)); do
+            test_sigalgs+="RSA+${sigalgs_preferred_rsa[$i]}:"
+        done
+        test_sigalgs+="RSA+${sigalgs_preferred_rsa[0]}"
+
+        # prepare the command to run
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        if [ -n "$CAPATH" ]; then
+            sslcommand+=" -CApath $CAPATH -showcerts"
+        elif [ -e "$CACERTS" ]; then
+            sslcommand+=" -CAfile $CACERTS"
+        fi
+        sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $supported_rsa_ciphers"
+        # since some ciphers supported by server may be SSLv2 only, we need to
+        # force use of TLSv1.2, otherwise openssl will send a SSLv2 compatible
+        # client hello
+        sslcommand+=" -no_ssl2 -no_ssl3"
+
+        ratelimit
+        verbose "Test ordering of sigalgs with $sslcommand -sigalgs $test_sigalgs"
+        local tmp=$(echo Q | $sslcommand -sigalgs $test_sigalgs 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "server selected $current_cipher, $current_protocol, $current_kex_sigalg"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == "0000" ]]; then
+            sigalgs_ordering="intolerant"
+        elif [[ -z $current_kex_sigalg ]] || [[ ! $current_cipher =~ DHE-RSA ]]; then
+            sigalgs_ordering="order-fallback"
+        else
+            if [[ ${sigalgs_preferred_rsa[0]} == $current_kex_sigalg ]]; then
+                sigalgs_ordering="server"
+            elif [[ ${sigalgs_preferred_rsa[${#sigalgs_preferred_rsa[@]}-1]} \
+                == $current_kex_sigalg ]]; then
+                sigalgs_ordering="client"
+            else
+                sigalgs_ordering="indeterminate"
+            fi
+        fi
+    fi
+
 }
 
 # If no options are given, give usage information and exit (with error code)
