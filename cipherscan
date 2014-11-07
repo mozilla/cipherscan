@@ -745,6 +745,9 @@ test_ecc_curves() {
         sslcommand+=" -CAfile $CACERTS"
     fi
     sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $ecc_ciphers"
+    # force the TLS to send a TLS1.0 client hello at least, as with SSLv2
+    # ciphers present it will try to send a SSLv2 compatible client hello
+    sslcommand+=" -no_ssl2 -no_ssl3"
 
     #
     # here we use the same logic as with detecting cipher suites: first
