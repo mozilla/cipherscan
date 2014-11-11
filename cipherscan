@@ -58,6 +58,44 @@ fi
 # RSA ciphers are put at the end to force Google servers to accept ECDSA ciphers
 # (probably a result of a workaround for the bug in Apple implementation of ECDSA)
 CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
+# as some servers are intolerant to large client hello's (or ones that have
+# RC4 ciphers below position 64), use the following for cipher testing in case
+# of problems
+FALLBACKCIPHERSUITE=(
+        'ECDHE-RSA-AES128-GCM-SHA256'
+        'ECDHE-RSA-AES128-SHA256'
+        'ECDHE-RSA-AES128-SHA'
+        'ECDHE-RSA-DES-CBC3-SHA'
+        'ECDHE-RSA-RC4-SHA'
+        'DHE-RSA-AES128-SHA'
+        'DHE-DSS-AES128-SHA'
+        'DHE-RSA-CAMELLIA128-SHA'
+        'DHE-RSA-AES256-SHA'
+        'DHE-DSS-AES256-SHA'
+        'DHE-RSA-CAMELLIA256-SHA'
+        'EDH-RSA-DES-CBC3-SHA'
+        'AES128-SHA'
+        'CAMELLIA128-SHA'
+        'AES256-SHA'
+        'CAMELLIA256-SHA'
+        'DES-CBC3-SHA'
+        'RC4-SHA'
+        'RC4-MD5'
+        'SEED-SHA'
+        'IDEA-CBC-SHA'
+        'IDEA-CBC-MD5'
+        'RC2-CBC-MD5'
+        'DES-CBC3-MD5'
+        'EXP1024-DHE-DSS-DES-CBC-SHA'
+        'EDH-RSA-DES-CBC-SHA'
+        'EXP1024-DES-CBC-SHA'
+        'DES-CBC-MD5'
+        'EXP1024-RC4-SHA'
+        'EXP-EDH-RSA-DES-CBC-SHA'
+        'EXP-DES-CBC-SHA'
+        'EXP-RC2-CBC-MD5'
+        'EXP-RC4-MD5'
+        )
 DEBUG=0
 VERBOSE=0
 DELAY=0
@@ -1055,6 +1093,22 @@ results=()
 
 # Call to the recursive loop that retrieves the cipher preferences
 get_cipher_pref $CIPHERSUITE
+
+# in case the server is intolerant to our big hello, try again with
+# a smaller one
+# do that either when the normal scan returns no ciphers or just SSLv2
+# ciphers (where it's likely that the limiting by OpenSSL worked)
+pref=(${cipherspref[0]})
+if [[ ${#cipherspref[@]} -eq 0 ]] || [[ ${pref[1]} == "SSLv2" ]]; then
+    cipherspref=()
+    ciphercertificates=()
+    results=()
+    OLDIFS="$IFS"
+    IFS=":"
+    CIPHERS="${FALLBACKCIPHERSUITE[*]}"
+    IFS="$OLDIFS"
+    get_cipher_pref "$CIPHERS"
+fi
 
 test_serverside_ordering
 
