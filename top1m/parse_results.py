@@ -187,7 +187,10 @@ for r,d,flist in os.walk(path):
                         temp_client_incompat[client_name][entry['cipher']] = 1
 
                 """ store the ciphers supported """
-                if 'ADH' in entry['cipher'] or 'AECDH' in entry['cipher']:
+                if 'ADH' in entry['cipher'] or 'AECDH' in entry['cipher'] or \
+                        'EXP' in entry['cipher'] or \
+                        'DES-CBC3-MD5' in entry['cipher'] or \
+                        'RC4-64-MD5' in entry['cipher']:
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
                     tempcipherstats[name] = 1
