@@ -660,13 +660,7 @@ do
     esac
 done
 
-if [ $VERBOSE != 0 ] ; then
-    [ -n "$CACERTS" ] && echo "Using trust anchors from $CACERTS"
-    echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
-         $OPENSSLBIN ciphers ALL 2>/dev/null
-fi
-
-# echo paramters left: $@
+# echo parameters left: $@
 
 TEMPTARGET=$(sed -e 's/^.* //'<<<"${@}")
 HOST=$(sed -e 's/:.*//'<<<"${TEMPTARGET}")
@@ -689,6 +683,12 @@ if [ ! -x $OPENSSLBIN ]; then
     if [ "$OUTPUTFORMAT" == "terminal" ]; then
         echo "custom openssl not executable, falling back to system one from $OPENSSLBIN"
     fi
+fi
+
+if [ $VERBOSE != 0 ] ; then
+    [ -n "$CACERTS" ] && echo "Using trust anchors from $CACERTS"
+    echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
+         $OPENSSLBIN ciphers ALL 2>/dev/null
 fi
 
 SCLIENTARGS=$(sed -e s,${TEMPTARGET},,<<<"${@}")
