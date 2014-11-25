@@ -35,9 +35,10 @@ if [ ! -e "$CACERTS" ]; then
     CACERTS="$(dirname $0)/ca-bundle.crt"
 fi
 
-# RSA ciphers are put at the end to force Google servers to accept ECDSA ciphers
-# (probably a result of a workaround for the bug in Apple implementation of ECDSA)
-CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
+# RSA ciphers can be placed at the end to force Google servers to accept ECDSA ciphers
+# (probably a result of a workaround for the bug in Apple implementation of ECDSA) :
+#CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
+CIPHERSUITE="ALL:COMPLEMENTOFALL:aRSA"
 DEBUG=0
 VERBOSE=0
 DELAY=0
