@@ -596,6 +596,12 @@ test_serverside_ordering() {
     fi
 }
 
+# If no options are given, give usage information and exit (with error code)
+if [ $# -eq 0 ]; then
+   usage;
+   exit 1
+fi
+
 # UNKNOWNOPTIONS=""
 while :
 do
