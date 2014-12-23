@@ -304,7 +304,8 @@ def evaluate_all(results):
 
     return status
 
-def process_results(data, level=None, do_json=False):
+def process_results(data, level=None, do_json=False, do_nagios=False):
+    exit_status = 0
     results = dict()
     # initialize the failures struct
     global failures
@@ -353,6 +354,8 @@ def process_results(data, level=None, do_json=False):
         print("\nThings that are bad:")
         for failure in failures['fubar']:
             print("* " + failure)
+        if do_nagios:
+            exit_status = 2
 
     # print failures
     if level != 'none':
@@ -360,13 +363,17 @@ def process_results(data, level=None, do_json=False):
             print("\nChanges needed to match the " + level + " level:")
             for failure in failures[level]:
                 print("* " + failure)
+            if do_nagios and exit_status < 2:
+                exit_status = 1
     else:
         for lvl in ['old', 'intermediate', 'modern']:
            if len(failures[lvl]) > 0:
                 print("\nChanges needed to match the " + lvl + " level:")
                 for failure in failures[lvl]:
                     print("* " + failure)
-    return True
+                if do_nagios and exit_status < 2:
+                    exit_status = 1
+    return exit_status
 
 def build_ciphers_lists(opensslbin):
     global all_ciphers, old_ciphers, intermediate_ciphers, modern_ciphers, errors
@@ -445,6 +452,8 @@ def main():
         help='output results in json format')
     parser.add_argument('--ops', dest='operator',
         help='optional name of the operator\'s team added into the JSON output (for database insertion)')
+    parser.add_argument('--nagios', dest='nagios', action='store_true',
+        help='use nagios-conformant exit codes')
     args = parser.parse_args()
 
     if args.debug:
@@ -467,15 +476,19 @@ def main():
             data = subprocess.check_output(['./cipherscan', '-o', args.openssl, '-j', args.target])
         else:
             data = subprocess.check_output(['./cipherscan', '-j', args.target])
-        process_results(data, args.level, args.json)
+        exit_status=process_results(data, args.level, args.json, args.nagios)
     else:
         if os.fstat(args.infile.fileno()).st_size < 2:
             logging.error("invalid input file")
             parser.print_help()
-            sys.exit(1)
+            if args.nagios:
+                sys.exit(3)
+            else:
+                sys.exit(1)
         data = args.infile.readline()
         logging.debug('Evaluating results from stdin: ' + data)
-        process_results(data, args.level, args.json)
+        exit_status=process_results(data, args.level, args.json, args.nagios)
+    sys.exit(exit_status)
 
 if __name__ == "__main__":
     main()
