@@ -456,6 +456,8 @@ def main():
         help='use nagios-conformant exit codes')
     args = parser.parse_args()
 
+    mypath = os.path.dirname(os.path.realpath(sys.argv[0]))
+
     if args.debug:
         logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
     else:
@@ -473,9 +475,9 @@ def main():
         logging.debug('Invoking cipherscan with target: ' + args.target)
         data=''
         if args.openssl:
-            data = subprocess.check_output(['./cipherscan', '-o', args.openssl, '-j', args.target])
+            data = subprocess.check_output([mypath + '/cipherscan', '-o', args.openssl, '-j', args.target])
         else:
-            data = subprocess.check_output(['./cipherscan', '-j', args.target])
+            data = subprocess.check_output([mypath + '/cipherscan', '-j', args.target])
         exit_status=process_results(data, args.level, args.json, args.nagios)
     else:
         if os.fstat(args.infile.fileno()).st_size < 2:
