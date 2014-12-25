@@ -1,51 +1,55 @@
 CipherScan
 ==========
-A very simple way to find out which SSL/TLS ciphersuites are supported by a target.
 
-Cipherscan tests the ordering of the SSL/TLS ciphers on a given target, for all major versions of SSL and TLS. It also extracts some certificates informations. Cipherscan uses the `openssl s_client` command line to run the tests.
+```bash
+$ ./cipherscan jve.linuxwall.info
+........................
+Target: jve.linuxwall.info:443
 
-On Linux x86_64 run: ./cipherscan www.google.com:443
-On any other *nix or *tux run: ./cipherscan -o /path/to/openssl www.google.com:443
-and watch.
+prio  ciphersuite                  protocols              pfs_keysize
+1     ECDHE-RSA-AES128-GCM-SHA256  TLSv1.2                ECDH,P-256,256bits
+2     ECDHE-RSA-AES256-GCM-SHA384  TLSv1.2                ECDH,P-256,256bits
+3     DHE-RSA-AES128-GCM-SHA256    TLSv1.2                DH,2048bits
+4     DHE-RSA-AES256-GCM-SHA384    TLSv1.2                DH,2048bits
+5     ECDHE-RSA-AES128-SHA256      TLSv1.2                ECDH,P-256,256bits
+6     ECDHE-RSA-AES128-SHA         TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
+7     ECDHE-RSA-AES256-SHA384      TLSv1.2                ECDH,P-256,256bits
+8     ECDHE-RSA-AES256-SHA         TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
+9     DHE-RSA-AES128-SHA256        TLSv1.2                DH,2048bits
+10    DHE-RSA-AES128-SHA           TLSv1,TLSv1.1,TLSv1.2  DH,2048bits
+11    DHE-RSA-AES256-SHA256        TLSv1.2                DH,2048bits
+12    DHE-RSA-AES256-SHA           TLSv1,TLSv1.1,TLSv1.2  DH,2048bits
+13    AES128-GCM-SHA256            TLSv1.2
+14    AES256-GCM-SHA384            TLSv1.2
+15    AES128-SHA256                TLSv1.2
+16    AES256-SHA256                TLSv1.2
+17    AES128-SHA                   TLSv1,TLSv1.1,TLSv1.2
+18    AES256-SHA                   TLSv1,TLSv1.1,TLSv1.2
+19    DHE-RSA-CAMELLIA256-SHA      TLSv1,TLSv1.1,TLSv1.2  DH,2048bits
+20    CAMELLIA256-SHA              TLSv1,TLSv1.1,TLSv1.2
+21    DHE-RSA-CAMELLIA128-SHA      TLSv1,TLSv1.1,TLSv1.2  DH,2048bits
+22    CAMELLIA128-SHA              TLSv1,TLSv1.1,TLSv1.2
+23    DES-CBC3-SHA                 TLSv1,TLSv1.1,TLSv1.2
 
-The newer your version of openssl, the better results you'll get. Versions
-of OpenSSL below 1.0.1 don't support TLS1.2 ciphers, elliptic curves, etc... Build your own or test what your system's OpenSSL supports.
-
-Cipherscan should work fine on Linux, Mac OS X, Solaris, Illumos, SmartOS, OpenIndiana if you specify a an openssl binary with -o.
-
-Build OpenSSL with ChaCha20-Poly1305 support (Optional)
--------------------------------------------------------
-
-The OpenSSL binary in this repository is built for 64bit Linux. If you wish to build a version with the same features for your own platform, [the snapshot from the OpenSSL gitweb view](http://git.openssl.org/gitweb/?p=openssl.git;a=tree;h=161b23361778c155f9c174694b1db2506a2e0b52;hb=9a8646510b) and build it like this:
-
-```
-./config no-shared
-make
-```
-
-And get the binary from `app/openssl`. (`./config` will ask you to run `make depend` which will fail - for our purposes this step is not required)
-
-Options
--------
-
-```
--a | --allciphers   Test all known ciphers individually at the end.
--b | --benchmark    Activate benchmark mode.
--d | --delay        Pause for n seconds between connections
--D | --debug        Output ALL the information.
--h | --help         Shows this help text.
--j | --json         Output results in JSON format.
--o | --openssl      path/to/your/openssl binary you want to use.
--v | --verbose      Increase verbosity.
+Certificate: trusted, 2048 bit, sha256WithRSAEncryption signature
+TLS ticket lifetime hint: 300
+OCSP stapling: not supported
+Server side cipher ordering
 ```
 
-Example
--------
+Cipherscan tests the ordering of the SSL/TLS ciphers on a given target, for all major versions of SSL and TLS. It also extracts some certificates informations, TLS options, OCSP stapling and more. Cipherscan is a wrapper above the `openssl s_client` command line.
 
-Testing plain SSL/TLS:
-```
-linux $ ./cipherscan www.google.com:443
+Cipherscan is meant to run on all flavors of unix. It ships with its own built of OpenSSL for Linux/64 and Darwin/64. On other platform, it will use the openssl version provided by the operating system (which may have limited ciphers support), or your own version provided in the `-o` command line flag.
+
+Examples
+--------
+
+Basic test:
+```bash
+$ ./cipherscan google.com
 ...................
+Target: google.com:443
+
 prio  ciphersuite                  protocols                    pfs_keysize
 1     ECDHE-RSA-CHACHA20-POLY1305  TLSv1.2                      ECDH,P-256,256bits
 2     ECDHE-RSA-AES128-GCM-SHA256  TLSv1.2                      ECDH,P-256,256bits
@@ -62,11 +66,14 @@ prio  ciphersuite                  protocols                    pfs_keysize
 13    AES256-GCM-SHA384            TLSv1.2
 14    AES256-SHA256                TLSv1.2
 15    AES256-SHA                   SSLv3,TLSv1,TLSv1.1,TLSv1.2
-16    ECDHE-RSA-DES-CBC3-SHA       SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
-17    DES-CBC3-SHA                 SSLv3,TLSv1,TLSv1.1,TLSv1.2
-18    ECDHE-RSA-AES128-SHA256      TLSv1.2                      ECDH,P-256,256bits
+16    ECDHE-RSA-AES128-SHA256      TLSv1.2                      ECDH,P-256,256bits
+17    ECDHE-RSA-DES-CBC3-SHA       SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
+18    DES-CBC3-SHA                 SSLv3,TLSv1,TLSv1.1,TLSv1.2
 
 Certificate: trusted, 2048 bit, sha1WithRSAEncryption signature
+TLS ticket lifetime hint: 100800
+OCSP stapling: not supported
+Server side cipher ordering
 ```
 
 Testing STARTTLS:
@@ -108,111 +115,6 @@ $ /cipherscan -j -starttls xmpp jabber.ccc.de:5222
             ],
             "trusted": "False",
             "pfs": "DH,1024bits"
-        },
-        {
-            "cipher": "AES256-SHA",
-            "protocols": [
-                "SSLv3",
-                "TLSv1"
-            ],
-            "pubkey": [
-                "2048"
-            ],
-            "sigalg": [
-                "sha1WithRSAEncryption"
-            ],
-            "trusted": "False",
-            "pfs": "None"
-        },
-        {
-            "cipher": "EDH-RSA-DES-CBC3-SHA",
-            "protocols": [
-                "SSLv3",
-                "TLSv1"
-            ],
-            "pubkey": [
-                "2048"
-            ],
-            "sigalg": [
-                "sha1WithRSAEncryption"
-            ],
-            "trusted": "False",
-            "pfs": "DH,1024bits"
-        },
-        {
-            "cipher": "DES-CBC3-SHA",
-            "protocols": [
-                "SSLv3",
-                "TLSv1"
-            ],
-            "pubkey": [
-                "2048"
-            ],
-            "sigalg": [
-                "sha1WithRSAEncryption"
-            ],
-            "trusted": "False",
-            "pfs": "None"
-        },
-        {
-            "cipher": "DHE-RSA-AES128-SHA",
-            "protocols": [
-                "SSLv3",
-                "TLSv1"
-            ],
-            "pubkey": [
-                "2048"
-            ],
-            "sigalg": [
-                "sha1WithRSAEncryption"
-            ],
-            "trusted": "False",
-            "pfs": "DH,1024bits"
-        },
-        {
-            "cipher": "AES128-SHA",
-            "protocols": [
-                "SSLv3",
-                "TLSv1"
-            ],
-            "pubkey": [
-                "2048"
-            ],
-            "sigalg": [
-                "sha1WithRSAEncryption"
-            ],
-            "trusted": "False",
-            "pfs": "None"
-        },
-        {
-            "cipher": "RC4-SHA",
-            "protocols": [
-                "SSLv3",
-                "TLSv1"
-            ],
-            "pubkey": [
-                "2048"
-            ],
-            "sigalg": [
-                "sha1WithRSAEncryption"
-            ],
-            "trusted": "False",
-            "pfs": "None"
-        },
-        {
-            "cipher": "RC4-MD5",
-            "protocols": [
-                "SSLv3",
-                "TLSv1"
-            ],
-            "pubkey": [
-                "2048"
-            ],
-            "sigalg": [
-                "sha1WithRSAEncryption"
-            ],
-            "trusted": "False",
-            "pfs": "None"
         }
     ]
 }
@@ -220,7 +122,7 @@ $ /cipherscan -j -starttls xmpp jabber.ccc.de:5222
 
 Analyzing configurations
 ------------------------
-The motivation behind cipherscan is to help admins configure good TLS on their
+The motivation behind cipherscan is to help operators configure good TLS on their
 endpoints. To help this further, the script `analyze.py` compares the results of
 a cipherscan with the TLS guidelines from https://wiki.mozilla.org/Security/Server_Side_TLS
 and output a level and recommendations.
@@ -260,6 +162,11 @@ compatibility level they want to support. Again, refer to
 https://wiki.mozilla.org/Security/Server_Side_TLS for more information.
 
 Note on Nagios mode:
+`analyse.py` can be ran as a nagios check with `--nagios`. The exit code will
+then represent the state of the configuration:
+* 2 (critical) for bad tls
+* 1 (warning) if it doesn't match the desired level
+* 0 (ok) if it matches.
 cipherscan can take more than 10 seconds to complete. To alleviate any timeout
 issues, you may want to run it outside of nagios, passing data through some
 temporary file.
