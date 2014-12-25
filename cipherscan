@@ -15,6 +15,9 @@ REALPATH=$(dirname $0)
 readlink -f $0 &>/dev/null && REALPATH=$(dirname $(readlink -f $0))
 OPENSSLBIN="${REALPATH}/openssl"
 
+# default string of TLS protocols
+TLSPROTOCOLS="-ssl2 -ssl3 -tls1 -tls1_1 -tls1_2"
+
 # test that timeout or gtimeout (darwin) are present
 TIMEOUTBIN="$(which timeout)"
 if [ "$TIMEOUTBIN" == "" ]; then
@@ -109,6 +112,19 @@ debug(){
         echo Debug: "$@" >&2
 	set -evx
     fi
+}
+
+check_tls_protocols() {
+    tls_protocols=""
+    for supported_protocol in ${TLSPROTOCOLS}; do
+        ${OPENSSLBIN} s_client "${supported_protocol}" 2>&1 | grep -q "unknown option"
+        if [ $? -eq 0 ]; then
+            # always show warning message as it's important to know what won't be tested
+            echo "${supported_protocol} not supported by ${OPENSSLBIN}"
+        else
+            tls_protocols="${tls_protocols} ${supported_protocol}"
+        fi
+    done
 }
 
 c_hash() {
@@ -237,7 +253,7 @@ test_cipher_on_target() {
     pfs=""
     previous_cipher=""
     certificates=""
-    for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
+    for tls_version in ${tls_protocols}
     do
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
@@ -697,7 +713,7 @@ fi
 SCLIENTARGS=$(sed -e s,${TEMPTARGET},,<<<"${@}")
 debug "sclientargs: $SCLIENTARGS"
 
-
+check_tls_protocols
 cipherspref=();
 ciphercertificates=()
 results=()
