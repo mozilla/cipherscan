@@ -10,7 +10,10 @@
 
 DOBENCHMARK=0
 BENCHMARKITER=30
-OPENSSLBIN="$(dirname $0)/openssl"
+REALPATH=$(dirname $0)
+# make sure this doesn't error out when readlink -f isn't available (OSX)
+readlink -f $0 &>/dev/null && REALPATH=$(dirname $(readlink -f $0))
+OPENSSLBIN="${REALPATH}/openssl"
 
 # test that timeout or gtimeout (darwin) are present
 TIMEOUTBIN="$(which timeout)"
