@@ -259,6 +259,11 @@ operators should now what level they want to match against, based on the
 compatibility level they want to support. Again, refer to
 https://wiki.mozilla.org/Security/Server_Side_TLS for more information.
 
+Note on Nagios mode:
+cipherscan can take more than 10 seconds to complete. To alleviate any timeout
+issues, you may want to run it outside of nagios, passing data through some
+temporary file.
+
 Contributors
 ------------
 
