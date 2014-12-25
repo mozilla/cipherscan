@@ -14,6 +14,16 @@ REALPATH=$(dirname $0)
 # make sure this doesn't error out when readlink -f isn't available (OSX)
 readlink -f $0 &>/dev/null && REALPATH=$(dirname $(readlink -f $0))
 OPENSSLBIN="${REALPATH}/openssl"
+if [ "$(uname -s)" == "Darwin" ]; then
+    OPENSSLBIN="${REALPATH}/openssl-darwin64"
+fi
+
+# cipherscan requires bash4, which doesn't come by default in OSX
+if [ "$(bash --version |grep 'version 4')" == "" ]; then
+    echo "Bash version 4 is required to run cipherscan."
+    echo "Please upgrade your version of bash (ex: brew install bash)."
+    exit 1
+fi
 
 # test that timeout or gtimeout (darwin) are present
 TIMEOUTBIN="$(which timeout)"
