@@ -410,7 +410,7 @@ def build_ciphers_lists(opensslbin):
     # use system openssl if not on linux 64
     if not opensslbin:
         if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
-            opensslbin='./openssl'
+            opensslbin=mypath + '/openssl'
         else:
             opensslbin='openssl'
             print("warning: analyze.py is using system's openssl, which may limit the tested ciphers and recommendations")
@@ -456,6 +456,7 @@ def main():
         help='use nagios-conformant exit codes')
     args = parser.parse_args()
 
+    global mypath
     mypath = os.path.dirname(os.path.realpath(sys.argv[0]))
 
     if args.debug:
