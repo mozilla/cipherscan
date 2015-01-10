@@ -62,7 +62,7 @@ def is_fubar(results):
                 has_wrong_pfs = True
         if 'md5WithRSAEncryption' in conn['sigalg']:
             has_md5_sig = True
-            logging.debug(conn['sigalg']+ ' is a fubar cert signature')
+            logging.debug(conn['sigalg'][0] + ' is a fubar cert signature')
             fubar = True
         if conn['trusted'] == 'False':
             has_untrust_cert = True
