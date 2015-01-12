@@ -19,7 +19,7 @@ if [ "$(uname -s)" == "Darwin" ]; then
 fi
 
 # cipherscan requires bash4, which doesn't come by default in OSX
-if [ "$(bash --version |grep -i 'version 4')" == "" ]; then
+if [ ${BASH_VERSINFO[0]} -lt 4 ]; then
     echo "Bash version 4 is required to run cipherscan."
     echo "Please upgrade your version of bash (ex: brew install bash)."
     exit 1
