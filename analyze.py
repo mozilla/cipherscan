@@ -410,7 +410,9 @@ def build_ciphers_lists(opensslbin):
     # use system openssl if not on linux 64
     if not opensslbin:
         if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
-            opensslbin=mypath + '/openssl'
+            opensslbin = mypath + '/openssl'
+        elif platform.system() == 'Darwin' and platform.architecture()[0] == '64bit':
+            opensslbin = mypath + '/openssl-darwin64'
         else:
             opensslbin='openssl'
             print("warning: analyze.py is using system's openssl, which may limit the tested ciphers and recommendations")
