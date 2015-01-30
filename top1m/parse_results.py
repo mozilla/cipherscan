@@ -230,16 +230,18 @@ for r,d,flist in os.walk(path):
                     tempcipherstats['Insecure'] = 1
 
                 """ store key handshake methods """
-                if 'ECDHE' in entry['cipher']:
+                if 'EXP' in entry['cipher']:
+                    pass
+                elif 'AECDH' in entry['cipher']:
+                    AECDH = True
+                elif 'ADH' in entry['cipher']:
+                    ADH = True
+                elif 'ECDHE' in entry['cipher']:
                     ECDHE = True
                     temppfsstats[entry['pfs']] = 1
                 elif 'DHE' in entry['cipher'] or 'EDH' in entry['cipher']:
                     DHE = True
                     temppfsstats[entry['pfs']] = 1
-                elif 'AECDH' in entry['cipher']:
-                    AECDH = True
-                elif 'ADH' in entry['cipher']:
-                    ADH = True
                 elif 'ECDH' in entry['cipher']:
                     ECDH = True
                 elif 'DH' in entry['cipher']:
