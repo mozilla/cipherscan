@@ -171,6 +171,14 @@ cipherscan can take more than 10 seconds to complete. To alleviate any timeout
 issues, you may want to run it outside of nagios, passing data through some
 temporary file.
 
+OpenSSL
+-------
+
+Cipherscan uses a custom release of openssl for linux 64 bits and darwin 64
+bits. OpenSSL is build from a custom branch maintained by Peter Mosmans that
+includes a number of patches not merged upstream. It can be found here:
+https://github.com/PeterMosmans/openssl
+
 Contributors
 ------------
 
