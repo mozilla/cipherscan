@@ -27,12 +27,19 @@ fi
 
 # test that timeout or gtimeout (darwin) are present
 TIMEOUTBIN="$(which timeout)"
+
 if [ "$TIMEOUTBIN" == "" ]; then
     TIMEOUTBIN="$(which gtimeout)"
     if [ "$TIMEOUTBIN" == "" ]; then
         echo "neither timeout nor gtimeout are present. install coreutils with {apt-get,yum,brew} install coreutils"
         exit 1
     fi
+fi
+
+# Check for busybox, which has different arguments
+TIMEOUTOUTPUT=$(($TIMEOUTBIN --help) 2>&1)
+if [[ "$TIMEOUTOUTPUT" =~ BusyBox ]]; then
+    TIMEOUTBIN="$TIMEOUTBIN -t"
 fi
 
 # find a list of trusted CAs on the local system, or use the provided list
