@@ -114,6 +114,7 @@ for r,d,flist in os.walk(path):
         tempcipherstats = {}
         ciphertypes = 0
         AESGCM = False
+        AESCBC = False
         AES = False
         CHACHA20 = False
         DES3 = False
@@ -215,11 +216,13 @@ for r,d,flist in os.walk(path):
                     tempcipherstats['Insecure'] = 1
                 elif 'AES128-GCM' in entry['cipher'] or 'AES256-GCM' in entry['cipher']:
                     if not AESGCM:
+                        AES = True
                         AESGCM = True
                         ciphertypes += 1
                 elif 'AES' in entry['cipher']:
-                    if not AES:
+                    if not AESCBC:
                         AES = True
+                        AESCBC = True
                         ciphertypes += 1
                 elif 'DES-CBC3' in entry['cipher']:
                     if not DES3:
@@ -402,10 +405,12 @@ for r,d,flist in os.walk(path):
                 cipherstats['AES-GCM Only'] += 1
         if AES:
             cipherstats['AES'] += 1
+        if AESCBC:
+            cipherstats['AES-CBC'] += 1
             if ciphertypes == 1:
                 cipherstats['AES-CBC Only'] += 1
-        if (AES and ciphertypes == 1) or (AESGCM and ciphertypes == 1)\
-            or (AES and AESGCM and ciphertypes == 2):
+        if (AESCBC and ciphertypes == 1) or (AESGCM and ciphertypes == 1)\
+            or (AESCBC and AESGCM and ciphertypes == 2):
                 cipherstats['AES Only'] += 1
         if CHACHA20:
             cipherstats['CHACHA20'] += 1
