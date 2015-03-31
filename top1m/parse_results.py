@@ -263,6 +263,35 @@ for r,d,flist in os.walk(path):
                     else:
                         tolerance[fallback_ids[entry]] = 'X'
                 tempfallbacks["".join(tolerance).rstrip()] = 1
+                configs = results['configs']
+                try:
+                    if configs['big-TLSv1.1']['tolerant'] != "True" and \
+                            configs['big-TLSv1.2']['tolerant'] != "True" and \
+                            configs['small-TLSv1.1']['tolerant'] != "True" and \
+                            configs['small-TLSv1.2']['tolerant'] != "True":
+                        if configs['v2-small-TLSv1.1']['tolerant'] != "True" and \
+                                configs['v2-small-TLSv1.2']['tolerant'] != "True":
+                            tempfallbacks['TLSv1.1+ strict Intolerance'] = 1
+                        else:
+                            tempfallbacks['TLSv1.1+ Intolerant'] = 1
+                    if configs['big-TLSv1.1']['tolerant'] == "True" and \
+                            configs['big-TLSv1.2']['tolerant'] != "True" and \
+                            configs['small-TLSv1.1']['tolerant'] == "True" and \
+                            configs['small-TLSv1.2']['tolerant'] != "True":
+                        if configs['v2-small-TLSv1.2']['tolerant'] != "True":
+                            tempfallbacks['TLSv1.2 strict Intolerance'] = 1
+                        else:
+                            tempfallbacks['TLSv1.2 Intolerant'] = 1
+                    if configs['big-TLSv1.2']['tolerant'] != "True" and \
+                            configs['big-TLSv1.1']['tolerant'] == "True" and \
+                            configs['small-TLSv1.2']['tolerant'] == "True":
+                        tempfallbacks['TLSv1.2 big Intolerance'] = 1
+                    if configs['big-TLSv1.2']['tolerant'] != "True" and \
+                            configs['small-TLSv1.0']['tolerant'] != "True" and \
+                            configs['small-TLSv1.0-notlsext']['tolerant'] == "True":
+                        tempfallbacks['TLS extension Intolerance'] = 1
+                except KeyError:
+                    pass
 
             """ loop over list of ciphers """
             for entry in results['ciphersuite']:
