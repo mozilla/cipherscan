@@ -49,6 +49,24 @@ client_ciphers['FF 29']=[
         'RC4-SHA',
         'RC4-MD5']
 
+client_ciphers['FF 35']=[
+        'ECDHE-ECDSA-AES128-GCM-SHA256',
+        'ECDHE-RSA-AES128-GCM-SHA256',
+        'ECDHE-ECDSA-AES256-SHA',
+        'ECDHE-ECDSA-AES128-SHA',
+        'ECDHE-RSA-AES128-SHA',
+        'ECDHE-RSA-AES256-SHA',
+        'ECDHE-ECDSA-RC4-SHA',
+        'ECDHE-RSA-RC4-SHA',
+        'DHE-RSA-AES128-SHA',
+        'DHE-DSS-AES128-SHA',
+        'DHE-RSA-AES256-SHA',
+        'AES128-SHA',
+        'AES256-SHA',
+        'DES-CBC3-SHA',
+        'RC4-SHA',
+        'RC4-MD5']
+
 report_untrused=False
 
 cipherstats = defaultdict(int)
