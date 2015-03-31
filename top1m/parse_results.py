@@ -451,7 +451,7 @@ for r,d,flist in os.walk(path):
                     cipherstats['x:' + client_name + ' RC4 Only'] += 1
                     for cipher in temp_client_incompat[client_name]:
                         client_RC4_Only_cipherstats[client_name][cipher] += 1
-                if client_RC4_Pref[client_name] and not 'RC4' in results['ciphersuite'][0]['cipher']:
+                if client_RC4_Pref[client_name]:
                     cipherstats['x:' + client_name + ' RC4 Preferred'] += 1
                     for cipher in temp_client_incompat[client_name]:
                         client_RC4_preferred_cipherstats[client_name][cipher] += 1
@@ -520,10 +520,6 @@ for r,d,flist in os.walk(path):
 """ The 'x:' + client_name + ' RC4 Preferred' counts only sites that
     effectively prefer RC4 when using given client, to make reporting more
     readable, sum it with sites that do that for all ciphers"""
-
-for client_name in client_ciphers:
-    if 'x:' + client_name + ' RC4 Preferred' in cipherstats and 'RC4 Preferred' in cipherstats:
-        cipherstats['x:' + client_name + ' RC4 Preferred'] += cipherstats['RC4 Preferred']
 
 print("SSL/TLS survey of %i websites from Alexa's top 1 million" % total)
 if report_untrused == False:
