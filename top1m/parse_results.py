@@ -617,6 +617,8 @@ for stat in sorted(keysize):
     percent = round(keysize[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(keysize[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
+if total == 0:
+    total = 1
 sys.stdout.write("RSA/ECDSA Dual Stack".ljust(25) + " " + str(dsarsastack).ljust(10) + str(round(dsarsastack/total * 100, 4)) + "\n")
 
 print("\nOCSP stapling             Count     Percent ")
