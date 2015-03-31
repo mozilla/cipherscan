@@ -447,7 +447,7 @@ for r,d,flist in os.walk(path):
 
                 client_selected_cipherstats[client_name][client_selected[client_name]] += 1
 
-                if client_RC4_Only[client_name] and ciphertypes != 1:
+                if client_RC4_Only[client_name]:
                     cipherstats['x:' + client_name + ' RC4 Only'] += 1
                     for cipher in temp_client_incompat[client_name]:
                         client_RC4_Only_cipherstats[client_name][cipher] += 1
