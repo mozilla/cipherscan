@@ -840,10 +840,8 @@ test_curves() {
                 local cname="$(get_curve_name ${ephem_data[1]})"
                 if [ "$cname" == "$most_wanted" ]; then
                     curves_ordering="client"
-                    break
                 else
                     curves_ordering="server"
-                    break
                 fi
             else
                 # some servers downgrade to non ECDH when curve order is changed
@@ -858,7 +856,12 @@ test_curves_fallback() {
     local fallback_available="False"
     # return variable: whatever a server will fall back to non ECC suite when
     # client doesn't advertise support for curves the server needs
-    fallback_supported="False"
+    fallback_supported="unknown"
+
+    if [ "$ecc_ciphers" == "" ]; then
+        verbose "No ECC cipher found, can't test curve fallback"
+        return
+    fi
 
     # prepare the ssl command we'll be using
     local sslcommand=""
@@ -885,20 +888,16 @@ test_curves_fallback() {
         IFS=':'
         local test_curves="${curves[*]}"
         IFS="$OLDIFS"
-        verbose "Testing $test_curves"
+        verbose "Testing $sslcommand -curves $test_curves"
 
         ratelimit
         local tmp=$(echo Q | $sslcommand -curves $test_curves 2>/dev/null)
         parse_openssl_output <<<"$tmp"
 
         if [[ -z $current_protocol || $current_cipher == "(NONE)" || $current_cipher == '0000' ]]; then
-                # server aborted connection
-                if [[ $fallback_available == "True" ]]; then
-                    fallback_supported="False"
-                else
-                    fallback_supported="unknown"
-                fi
-                break
+            verbose "Curve fallback failed, server refused connection"
+            fallback_supported="False"
+            break
         else
             # server accepted connection
             local ephem_data=(${current_pfs//,/ })
