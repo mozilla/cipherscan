@@ -147,16 +147,9 @@ for r,d,flist in os.walk(path):
             if len(results['ciphersuite']) < 1:
                 continue
 
-            """ save ECC curve stats """
-            if 'curve_fallback' in results:
-                tempeccfallback = results['curve_fallback']
-            if 'curve_ordering' in results:
-                tempeccordering = results['curve_ordering']
-            if 'curve' in results:
-                for curve in results['curve']:
-                    tempecccurve[curve] = 1
-                if len(results['curve']) == 1:
-                    tempecccurve[curve + ' Only'] = 1
+            """ save ECC fallback """
+            if 'curves_fallback' in results:
+                tempeccfallback = results['curves_fallback']
 
             """ loop over list of ciphers """
             for entry in results['ciphersuite']:
@@ -282,6 +275,16 @@ for r,d,flist in os.walk(path):
                         TLS1_1 = True
                     elif protocol == 'TLSv1.2':
                         TLS1_2 = True
+
+                """ save ECC curves stats """
+                if 'curves_ordering' in entry:
+                    tempeccordering = entry['curves_ordering']
+                if 'curves' in entry:
+                    for curve in entry['curves']:
+                        tempecccurve[curve] = 1
+                    if len(entry['curves']) == 1:
+                        tempecccurve[curve + ' Only'] = 1
+
         json_file.close()
 
         """ don't store stats from unusued servers """
