@@ -62,6 +62,7 @@ TIMEOUT=30
 CAPATH=""
 SAVECRT=""
 TEST_CURVES="False"
+has_curves="False"
 unset known_certs
 declare -A known_certs
 unset cert_checksums
@@ -446,23 +447,24 @@ test_cipher_on_target() {
 
     # if cipher contains NONE, the cipher wasn't accepted
     elif [ "$cipher" == '(NONE)  ' ]; then
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $curves_ordering"
+        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
 
     # the connection succeeded
     else
+        current_curves="None"
         # if pfs uses ECDH, test supported curves
         if [[ $pfs =~ ECDH ]]; then
+            has_curves="True"
             if [ $TEST_CURVES == "True" ]; then
                 test_ecc_curves
-                pfs=$current_curves
             else
                 # resolve the openssl curve to the proper IANA name
-                pfs="$(get_curve_name $(echo $pfs|cut -d ',' -f2))"
+                current_curves="$(get_curve_name $(echo $pfs|cut -d ',' -f2))"
             fi
         fi
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $curves_ordering"
+        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
         verbose "handshake succeeded, server returned ciphersuite '$result'"
         return 0
     fi
@@ -523,6 +525,7 @@ display_results_in_terminal() {
     local trusted
     local tickethint
     local ocspstaple
+    local curvesordering
     local different=False
     echo "Target: $TARGET"; echo
     for cipher in "${cipherspref[@]}"; do
@@ -541,6 +544,9 @@ display_results_in_terminal() {
             trusted="${cipher_data[4]}"
             tickethint="${cipher_data[5]}"
             ocspstaple="${cipher_data[6]}"
+            if [[ $TEST_CURVES == "True" && "${cipher_data[9]}" != "" ]]; then
+                curvesordering="${cipher_data[9]}"
+            fi
         else
             if [ "$pubkey" != "${cipher_data[2]}" ]; then
                 different=True
@@ -557,6 +563,12 @@ display_results_in_terminal() {
             if [ "$ocspstaple" != "${cipher_data[6]}" ]; then
                 different=True
             fi
+            if [[ "$curvesordering" == "" && "${cipher_data[9]}" != "" ]]; then
+                curvesordering="${cipher_data[9]}"
+            fi
+            if [[ "$curvesordering" != "" && "$curvesordering" != "${cipher_data[9]}" ]]; then
+                different=True
+            fi
         fi
         results=("${results[@]}" "$r")
         ctr=$((ctr+1))
@@ -564,14 +576,17 @@ display_results_in_terminal() {
 
     header="prio ciphersuite protocols"
     if [ $different == "True" ]; then
-        header="$header pubkey_size signature_algoritm trusted ticket_hint ocsp_staple"
+        header+=" pubkey_size signature_algoritm trusted ticket_hint ocsp_staple"
     fi
-    header="$header pfs"
-    if [ $TEST_CURVES == "True" ]; then
-        header="$header curves_ordering"
+    header+=" pfs"
+    if [ $has_curves == "True" ]; then
+        header+=" curves"
+        if [[ $TEST_CURVES == "True" && $different == "True" ]]; then
+            header+=" curves_ordering"
+        fi
     fi
     if [ $DOBENCHMARK -eq 1 ]; then
-        header="$header avg_handshake_microsec"
+        header+=" avg_handshake_microsec"
     fi
     ctr=0
     for result in "${results[@]}"; do
@@ -583,7 +598,7 @@ display_results_in_terminal() {
             echo $result|grep -v '(NONE)'
         else
             # prints priority, ciphersuite, protocols and pfs
-            awk '!/(NONE)/{print $1 " " $2 " " $3 " " $9}' <<<"$result"
+            awk '!/(NONE)/{print $1 " " $2 " " $3 " " $9 " " $10}' <<<"$result"
         fi
     done|column -t
     echo
@@ -601,9 +616,12 @@ display_results_in_terminal() {
         echo "OCSP stapling: not supported"
     fi
     if [[ $serverside == "True" ]]; then
-        echo "Server side cipher ordering"
+        echo "Cipher ordering: server"
     else
-        echo "Client side cipher ordering"
+        echo "Cipher ordering: client"
+    fi
+    if [ $TEST_CURVES == "True" ]; then
+        echo "Curves ordering: $curvesordering"
     fi
 }
 
@@ -629,10 +647,10 @@ display_results_in_json() {
         echo -n "\"pfs\":\"$pfs\""
         if [[ "${cipher_arr[0]}" =~ ECDH ]]; then
             echo -n ","
-            echo -n "\"elliptic_curves\":[\"${pfs//,/\",\"}\"]"
+            echo -n "\"curves\":[\"${cipher_arr[8]//,/\",\"}\"]"
             if [ $TEST_CURVES == "True" ]; then
                 echo -n ","
-                echo -n "\"curves_ordering\":\"${cipher_arr[8]}\""
+                echo -n "\"curves_ordering\":\"${cipher_arr[9]}\""
             fi
         fi
         echo -n "}"
