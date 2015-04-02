@@ -147,9 +147,20 @@ for r,d,flist in os.walk(path):
             if len(results['ciphersuite']) < 1:
                 continue
 
-            """ save ECC fallback """
+            """ save ECC fallback (new format) """
             if 'curves_fallback' in results:
                 tempeccfallback = results['curves_fallback']
+
+            """ save ECC curve stats (old format) """
+            if 'curve_fallback' in results:
+                tempeccfallback = results['curve_fallback']
+            if 'curve_ordering' in results:
+                tempeccordering = results['curve_ordering']
+            if 'curve' in results:
+                for curve in results['curve']:
+                    tempecccurve[curve] = 1
+                if len(results['curve']) == 1:
+                    tempecccurve[curve + ' Only'] = 1
 
             """ loop over list of ciphers """
             for entry in results['ciphersuite']:
