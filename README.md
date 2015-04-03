@@ -50,62 +50,89 @@ $ ./cipherscan google.com
 ...................
 Target: google.com:443
 
-prio  ciphersuite                  protocols                    pfs_keysize
-1     ECDHE-RSA-CHACHA20-POLY1305  TLSv1.2                      ECDH,P-256,256bits
-2     ECDHE-RSA-AES128-GCM-SHA256  TLSv1.2                      ECDH,P-256,256bits
-3     ECDHE-RSA-AES128-SHA         TLSv1.1,TLSv1.2              ECDH,P-256,256bits
-4     ECDHE-RSA-RC4-SHA            SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
-5     AES128-GCM-SHA256            TLSv1.2
-6     AES128-SHA256                TLSv1.2
-7     AES128-SHA                   TLSv1.1,TLSv1.2
-8     RC4-SHA                      SSLv3,TLSv1,TLSv1.1,TLSv1.2
-9     RC4-MD5                      SSLv3,TLSv1,TLSv1.1,TLSv1.2
-10    ECDHE-RSA-AES256-GCM-SHA384  TLSv1.2                      ECDH,P-256,256bits
-11    ECDHE-RSA-AES256-SHA384      TLSv1.2                      ECDH,P-256,256bits
-12    ECDHE-RSA-AES256-SHA         SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
-13    AES256-GCM-SHA384            TLSv1.2
-14    AES256-SHA256                TLSv1.2
-15    AES256-SHA                   SSLv3,TLSv1,TLSv1.1,TLSv1.2
-16    ECDHE-RSA-AES128-SHA256      TLSv1.2                      ECDH,P-256,256bits
-17    ECDHE-RSA-DES-CBC3-SHA       SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
-18    DES-CBC3-SHA                 SSLv3,TLSv1,TLSv1.1,TLSv1.2
+prio  ciphersuite                  protocols                    pfs                 curves
+1     ECDHE-RSA-CHACHA20-POLY1305  TLSv1.2                      ECDH,P-256,256bits  prime256v1
+2     ECDHE-RSA-AES128-GCM-SHA256  TLSv1.2                      ECDH,P-256,256bits  prime256v1
+3     ECDHE-RSA-AES128-SHA         TLSv1.1,TLSv1.2              ECDH,P-256,256bits  prime256v1
+4     ECDHE-RSA-RC4-SHA            SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits  prime256v1
+5     AES128-GCM-SHA256            TLSv1.2                      None                None
+6     AES128-SHA256                TLSv1.2                      None                None
+7     AES128-SHA                   TLSv1.1,TLSv1.2              None                None
+8     RC4-SHA                      SSLv3,TLSv1,TLSv1.1,TLSv1.2  None                None
+9     RC4-MD5                      SSLv3,TLSv1,TLSv1.1,TLSv1.2  None                None
+10    ECDHE-RSA-AES256-GCM-SHA384  TLSv1.2                      ECDH,P-256,256bits  prime256v1
+11    ECDHE-RSA-AES256-SHA384      TLSv1.2                      ECDH,P-256,256bits  prime256v1
+12    ECDHE-RSA-AES256-SHA         SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits  prime256v1
+13    AES256-GCM-SHA384            TLSv1.2                      None                None
+14    AES256-SHA256                TLSv1.2                      None                None
+15    AES256-SHA                   SSLv3,TLSv1,TLSv1.1,TLSv1.2  None                None
+16    ECDHE-RSA-AES128-SHA256      TLSv1.2                      ECDH,P-256,256bits  prime256v1
+17    ECDHE-RSA-DES-CBC3-SHA       SSLv3,TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits  prime256v1
+18    DES-CBC3-SHA                 SSLv3,TLSv1,TLSv1.1,TLSv1.2  None                None
 
 Certificate: trusted, 2048 bit, sha1WithRSAEncryption signature
 TLS ticket lifetime hint: 100800
 OCSP stapling: not supported
-Server side cipher ordering
+Cipher ordering: server
 ```
 
 Testing STARTTLS:
 ```
-darwin $ ./cipherscan -o ./openssl-mine -starttls xmpp jabber.ccc.de:5222
-.........
-.........
-prio  ciphersuite           protocols    pfs_keysize
-1     DHE-RSA-AES256-SHA    SSLv3,TLSv1  DH,1024bits
-2     AES256-SHA            SSLv3,TLSv1
-3     EDH-RSA-DES-CBC3-SHA  SSLv3,TLSv1  DH,1024bits
-4     DES-CBC3-SHA          SSLv3,TLSv1
-5     DHE-RSA-AES128-SHA    SSLv3,TLSv1  DH,1024bits
-6     AES128-SHA            SSLv3,TLSv1
-7     RC4-SHA               SSLv3,TLSv1
-8     RC4-MD5               SSLv3,TLSv1
+darwin$ $ ./cipherscan --curves -starttls xmpp jabber.ccc.de:5222
+................................
+Target: jabber.ccc.de:5222
+
+prio  ciphersuite                  protocols              pfs                 curves
+1     ECDHE-RSA-AES256-GCM-SHA384  TLSv1.2                ECDH,P-256,256bits  prime256v1
+2     ECDHE-RSA-AES256-SHA384      TLSv1.2                ECDH,P-256,256bits  prime256v1
+3     ECDHE-RSA-AES256-SHA         TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits  prime256v1
+4     DHE-RSA-AES256-GCM-SHA384    TLSv1.2                DH,1024bits         None
+5     DHE-RSA-AES256-SHA256        TLSv1.2                DH,1024bits         None
+6     DHE-RSA-AES256-SHA           TLSv1,TLSv1.1,TLSv1.2  DH,1024bits         None
+7     DHE-RSA-CAMELLIA256-SHA      TLSv1,TLSv1.1,TLSv1.2  DH,1024bits         None
+8     AES256-GCM-SHA384            TLSv1.2                None                None
+9     AES256-SHA256                TLSv1.2                None                None
+10    AES256-SHA                   TLSv1,TLSv1.1,TLSv1.2  None                None
+11    CAMELLIA256-SHA              TLSv1,TLSv1.1,TLSv1.2  None                None
+12    ECDHE-RSA-AES128-GCM-SHA256  TLSv1.2                ECDH,P-256,256bits  prime256v1
+13    ECDHE-RSA-AES128-SHA256      TLSv1.2                ECDH,P-256,256bits  prime256v1
+14    ECDHE-RSA-AES128-SHA         TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits  prime256v1
+15    DHE-RSA-AES128-GCM-SHA256    TLSv1.2                DH,1024bits         None
+16    DHE-RSA-AES128-SHA256        TLSv1.2                DH,1024bits         None
+17    DHE-RSA-AES128-SHA           TLSv1,TLSv1.1,TLSv1.2  DH,1024bits         None
+18    DHE-RSA-SEED-SHA             TLSv1,TLSv1.1,TLSv1.2  DH,1024bits         None
+19    DHE-RSA-CAMELLIA128-SHA      TLSv1,TLSv1.1,TLSv1.2  DH,1024bits         None
+20    AES128-GCM-SHA256            TLSv1.2                None                None
+21    AES128-SHA256                TLSv1.2                None                None
+22    AES128-SHA                   TLSv1,TLSv1.1,TLSv1.2  None                None
+23    SEED-SHA                     TLSv1,TLSv1.1,TLSv1.2  None                None
+24    CAMELLIA128-SHA              TLSv1,TLSv1.1,TLSv1.2  None                None
 
 Certificate: UNTRUSTED, 2048 bit, sha1WithRSAEncryption signature
+TLS ticket lifetime hint: None
+OCSP stapling: not supported
+Cipher ordering: client
+Curves ordering: server
+Curves fallback: False
 ```
 
 Exporting to JSON with the `-j` command line option:
 ```javascript
-$ /cipherscan -j -starttls xmpp jabber.ccc.de:5222
+$ ./cipherscan --curves -j www.ebay.com | j
 {
-    "target": "jabber.ccc.de:5222",
-    "date": "Sat, 19 Apr 2014 11:40:40 -0400",
+    "curves_fallback": "False",
+    "serverside": "True",
+    "target": "www.ebay.com:443",
+    "utctimestamp": "2015-04-03T14:54:31.0Z",
     "ciphersuite": [
         {
-            "cipher": "DHE-RSA-AES256-SHA",
+            "cipher": "AES256-SHA",
+            "ocsp_stapling": "False",
+            "pfs": "None",
             "protocols": [
-                "SSLv3",
-                "TLSv1"
+                "TLSv1",
+                "TLSv1.1",
+                "TLSv1.2"
             ],
             "pubkey": [
                 "2048"
@@ -113,8 +140,33 @@ $ /cipherscan -j -starttls xmpp jabber.ccc.de:5222
             "sigalg": [
                 "sha1WithRSAEncryption"
             ],
-            "trusted": "False",
-            "pfs": "DH,1024bits"
+            "ticket_hint": "None",
+            "trusted": "True"
+        },
+        {
+            "cipher": "ECDHE-RSA-DES-CBC3-SHA",
+            "curves": [
+                "prime256v1",
+                "secp384r1",
+                "secp224r1",
+                "secp521r1"
+            ],
+            "curves_ordering": "server",
+            "ocsp_stapling": "False",
+            "pfs": "ECDH,P-256,256bits",
+            "protocols": [
+                "TLSv1",
+                "TLSv1.1",
+                "TLSv1.2"
+            ],
+            "pubkey": [
+                "2048"
+            ],
+            "sigalg": [
+                "sha1WithRSAEncryption"
+            ],
+            "ticket_hint": "None",
+            "trusted": "True"
         }
     ]
 }
@@ -196,7 +248,14 @@ Contributors
 ------------
 
 * Julien Vehent <julien@linuxwall.info> (original author)
-* Hubert Kario <hkario@redhat.com>
+* Hubert Kario <hkario@redhat.com> (co-maintainer)
 * Pepi Zawodsky <git@maclemon.at>
 * Michael Zeltner <m@niij.org>
+* Peter Mosmans <support@go-forward.net>
+* Vincent Riquer <v.riquer@b2f-concept.com>
+* Christian Stadelmann <dev@genodeftest.de>
 * Simon Deziel <simon.deziel@gmail.com>
+* Aaron Zauner <azet@azet.org>
+* Mike <mikedawg@gmail.com>
+* Phil Cohen <phlipper@users.noreply.github.com>
+* Samuel Kleiner <sam@firstbanco.com>
