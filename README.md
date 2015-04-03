@@ -6,35 +6,35 @@ $ ./cipherscan jve.linuxwall.info
 ........................
 Target: jve.linuxwall.info:443
 
-prio  ciphersuite                  protocols              pfs_keysize
-1     ECDHE-RSA-AES128-GCM-SHA256  TLSv1.2                ECDH,P-256,256bits
-2     ECDHE-RSA-AES256-GCM-SHA384  TLSv1.2                ECDH,P-256,256bits
-3     DHE-RSA-AES128-GCM-SHA256    TLSv1.2                DH,2048bits
-4     DHE-RSA-AES256-GCM-SHA384    TLSv1.2                DH,2048bits
-5     ECDHE-RSA-AES128-SHA256      TLSv1.2                ECDH,P-256,256bits
-6     ECDHE-RSA-AES128-SHA         TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
-7     ECDHE-RSA-AES256-SHA384      TLSv1.2                ECDH,P-256,256bits
-8     ECDHE-RSA-AES256-SHA         TLSv1,TLSv1.1,TLSv1.2  ECDH,P-256,256bits
-9     DHE-RSA-AES128-SHA256        TLSv1.2                DH,2048bits
-10    DHE-RSA-AES128-SHA           TLSv1,TLSv1.1,TLSv1.2  DH,2048bits
-11    DHE-RSA-AES256-SHA256        TLSv1.2                DH,2048bits
-12    DHE-RSA-AES256-SHA           TLSv1,TLSv1.1,TLSv1.2  DH,2048bits
-13    AES128-GCM-SHA256            TLSv1.2
-14    AES256-GCM-SHA384            TLSv1.2
-15    AES128-SHA256                TLSv1.2
-16    AES256-SHA256                TLSv1.2
-17    AES128-SHA                   TLSv1,TLSv1.1,TLSv1.2
-18    AES256-SHA                   TLSv1,TLSv1.1,TLSv1.2
-19    DHE-RSA-CAMELLIA256-SHA      TLSv1,TLSv1.1,TLSv1.2  DH,2048bits
-20    CAMELLIA256-SHA              TLSv1,TLSv1.1,TLSv1.2
-21    DHE-RSA-CAMELLIA128-SHA      TLSv1,TLSv1.1,TLSv1.2  DH,2048bits
-22    CAMELLIA128-SHA              TLSv1,TLSv1.1,TLSv1.2
-23    DES-CBC3-SHA                 TLSv1,TLSv1.1,TLSv1.2
+prio  ciphersuite                  protocols              pfs                 curves
+1     ECDHE-RSA-AES128-GCM-SHA256  TLSv1.2                ECDH,P-384,384bits  secp384r1
+2     ECDHE-RSA-AES256-GCM-SHA384  TLSv1.2                ECDH,P-384,384bits  secp384r1
+3     DHE-RSA-AES128-GCM-SHA256    TLSv1.2                DH,2048bits         None
+4     DHE-RSA-AES256-GCM-SHA384    TLSv1.2                DH,2048bits         None
+5     ECDHE-RSA-AES128-SHA256      TLSv1.2                ECDH,P-384,384bits  secp384r1
+6     ECDHE-RSA-AES128-SHA         TLSv1,TLSv1.1,TLSv1.2  ECDH,P-384,384bits  secp384r1
+7     ECDHE-RSA-AES256-SHA384      TLSv1.2                ECDH,P-384,384bits  secp384r1
+8     ECDHE-RSA-AES256-SHA         TLSv1,TLSv1.1,TLSv1.2  ECDH,P-384,384bits  secp384r1
+9     DHE-RSA-AES128-SHA256        TLSv1.2                DH,2048bits         None
+10    DHE-RSA-AES128-SHA           TLSv1,TLSv1.1,TLSv1.2  DH,2048bits         None
+11    DHE-RSA-AES256-SHA256        TLSv1.2                DH,2048bits         None
+12    DHE-RSA-AES256-SHA           TLSv1,TLSv1.1,TLSv1.2  DH,2048bits         None
+13    AES128-GCM-SHA256            TLSv1.2                None                None
+14    AES256-GCM-SHA384            TLSv1.2                None                None
+15    AES128-SHA256                TLSv1.2                None                None
+16    AES256-SHA256                TLSv1.2                None                None
+17    AES128-SHA                   TLSv1,TLSv1.1,TLSv1.2  None                None
+18    AES256-SHA                   TLSv1,TLSv1.1,TLSv1.2  None                None
+19    DHE-RSA-CAMELLIA256-SHA      TLSv1,TLSv1.1,TLSv1.2  DH,2048bits         None
+20    CAMELLIA256-SHA              TLSv1,TLSv1.1,TLSv1.2  None                None
+21    DHE-RSA-CAMELLIA128-SHA      TLSv1,TLSv1.1,TLSv1.2  DH,2048bits         None
+22    CAMELLIA128-SHA              TLSv1,TLSv1.1,TLSv1.2  None                None
+23    DES-CBC3-SHA                 TLSv1,TLSv1.1,TLSv1.2  None                None
 
 Certificate: trusted, 2048 bit, sha256WithRSAEncryption signature
 TLS ticket lifetime hint: 300
-OCSP stapling: not supported
-Server side cipher ordering
+OCSP stapling: supported
+Cipher ordering: server
 ```
 
 Cipherscan tests the ordering of the SSL/TLS ciphers on a given target, for all major versions of SSL and TLS. It also extracts some certificates informations, TLS options, OCSP stapling and more. Cipherscan is a wrapper above the `openssl s_client` command line.
