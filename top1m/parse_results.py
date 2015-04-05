@@ -290,6 +290,12 @@ for r,d,flist in os.walk(path):
                             configs['small-TLSv1.0']['tolerant'] != "True" and \
                             configs['small-TLSv1.0-notlsext']['tolerant'] == "True":
                         tempfallbacks['TLS extension Intolerance'] = 1
+                    if configs['big-TLSv1.2']['tolerant'] != "True" and \
+                            configs['big-TLSv1.1']['tolerant'] != "True" and \
+                            configs['big-TLSv1.0']['tolerant'] != "True" and \
+                            (configs['small-TLSv1.2']['tolerant'] == "True" or
+                                    configs['v2-small-TLSv1.2']['tolerant'] == "True"):
+                        tempfallbacks['Big handshake intolerance'] = 1
                 except KeyError:
                     pass
 
