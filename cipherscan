@@ -42,6 +42,11 @@ if [[ "$TIMEOUTOUTPUT" =~ BusyBox ]]; then
     TIMEOUTBIN="$TIMEOUTBIN -t"
 fi
 
+# use custom config file to enable GOST ciphers
+if [[ -e $(dirname $0)/openssl.cnf ]]; then
+    export OPENSSL_CONF="$(dirname $0)/openssl.cnf"
+fi
+
 # find a list of trusted CAs on the local system, or use the provided list
 if [ -z "$CACERTS" ]; then
     for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
