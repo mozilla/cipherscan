@@ -87,6 +87,7 @@ for r,d,flist in os.walk(path):
         tempkeystats = {}
         tempecckeystats = {}
         tempdsakeystats = {}
+        tempgostkeystats = {}
         tempsigstats = {}
         tempticketstats = {}
         tempeccfallback = "unknown"
@@ -101,6 +102,7 @@ for r,d,flist in os.walk(path):
         DES3 = False
         CAMELLIA = False
         RC4 = False
+        GOST89_cipher = False
         """ variables to support handshake simulation for different clients """
         client_RC4_Only={}
         client_compat={}
@@ -124,6 +126,7 @@ for r,d,flist in os.walk(path):
         RSA = False
         ECDH = False
         DH = False
+        GOST2001_kex = False
         SSL2 = False
         SSL3 = False
         TLS1 = False
@@ -220,6 +223,11 @@ for r,d,flist in os.walk(path):
                     ciphertypes += 1
                     name = "y:" + entry['cipher']
                     tempcipherstats[name] = 1
+                elif 'GOST89-GOST89' in entry['cipher']:
+                    GOST89_cipher = True
+                    ciphertypes += 1
+                    name = "y:" + entry['cipher']
+                    tempcipherstats[name] = 1
                 else:
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
@@ -241,6 +249,8 @@ for r,d,flist in os.walk(path):
                     ECDH = True
                 elif 'DH' in entry['cipher']:
                     DH = True
+                elif entry['cipher'].startswith('GOST2001'):
+                    GOST2001_kex = True
                 else:
                     RSA = True
 
@@ -252,6 +262,8 @@ for r,d,flist in os.walk(path):
                     tempdsakeystats[entry['pubkey'][0]] = 1
                 elif 'AECDH' in entry['cipher'] or 'ADH' in entry['cipher']:
                     """ skip """
+                elif 'GOST' in entry['cipher']:
+                    tempgostkeystats[entry['pubkey'][0]] = 1
                 else:
                     tempkeystats[entry['pubkey'][0]] = 1
                     if ECDSA:
@@ -320,6 +332,8 @@ for r,d,flist in os.walk(path):
             keysize['ECDSA ' + s] += 1
         for s in tempdsakeystats:
             keysize['DSA ' + s] += 1
+        for s in tempgostkeystats:
+            keysize['GOST ' + s] += 1
 
         if dualstack:
             dsarsastack += 1
@@ -449,6 +463,8 @@ for r,d,flist in os.walk(path):
             handshakestats['ECDH'] += 1
         if DH:
             handshakestats['DH'] += 1
+        if GOST2001_kex:
+            handshakestats['GOST2001'] += 1
         if RSA:
             handshakestats['RSA'] += 1
 
