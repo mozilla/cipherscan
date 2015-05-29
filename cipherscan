@@ -283,6 +283,20 @@ c_hash() {
     done
 }
 
+crude_grep() {
+    while read line; do
+        if [[ $line =~ $1 ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+check_option_support() {
+    $OPENSSLBIN s_client -help 2>&1 | crude_grep "$1"
+    return $?
+}
+
 parse_openssl_output() {
     # clear variables in case matching doesn't hit them
     current_ocspstaple="False"
@@ -1218,6 +1232,23 @@ test_tls_tolerance() {
                 tls_tolerance['small-TLSv1.0']="False"
         else
             tls_tolerance['small-TLSv1.0']="True $current_protocol $current_cipher $current_trusted"
+        fi
+
+        #
+        # v3 format TLSv1.0 hello, small cipher list, no extensions
+        #
+        if check_option_support "-no_tlsext"; then
+            ratelimit
+            verbose "Testing fallback with $sslcommand -no_tls1_2 -no_tls1_1 -no_tlsext"
+            local tmp=$(echo Q | $sslcommand -no_tls1_2 -no_tls1_1 -no_tlsext 2>/dev/null)
+            parse_openssl_output <<<"$tmp"
+            verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
+            if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+                || $current_cipher == '0000' ]]; then
+                    tls_tolerance['small-TLSv1.0-notlsext']="False"
+            else
+                tls_tolerance['small-TLSv1.0-notlsext']="True $current_protocol $current_cipher $current_trusted"
+            fi
         fi
 
         #

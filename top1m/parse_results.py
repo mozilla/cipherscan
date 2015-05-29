@@ -112,6 +112,8 @@ fallback_ids[' '] = i
 i+=1
 fallback_ids['small-SSLv3'] = i
 i+=1
+fallback_ids['small-TLSv1.0-notlsext'] = i
+i+=1
 fallback_ids['small-TLSv1.0'] = i
 i+=1
 fallback_ids['small-TLSv1.1'] = i
@@ -734,8 +736,8 @@ for stat in sorted(protocolstats):
 
 print("\nRequired fallbacks                       Count     Percent")
 print("----------------------------------------+---------+-------")
-print("big  smal v2   ")
-print("----+----+-----+------------------------+---------+-------")
+print("big  small v2   ")
+print("----+-----+-----+------------------------+---------+-------")
 for stat in sorted(fallbacks):
     percent = round(fallbacks[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(40) + " " + str(fallbacks[stat]).ljust(10) + str(percent).ljust(4) + "\n")
