@@ -311,7 +311,12 @@ parse_openssl_output() {
         while read data; do
             if [[ $data =~ Signature\ Algorithm ]]; then
                 local match=($data)
-                current_sigalg="${match[2]}"
+                unset match[0]
+                unset match[1]
+                local old_IFS="$IFS"
+                IFS="_"
+                current_sigalg="${match[*]}"
+                IFS="$old_IFS"
             fi
         done <<<"$ossl_out"
     fi
