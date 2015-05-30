@@ -53,7 +53,7 @@ def is_fubar(results):
             has_ssl2 = True
             logging.debug('SSLv2 is in the list of fubar protocols')
             fubar = True
-        if conn['pubkey'] < 2048:
+        if int(conn['pubkey'][0]) < 2048:
             has_wrong_pubkey = True
             logging.debug(conn['pubkey'] + ' is a fubar pubkey size')
             fubar = True
