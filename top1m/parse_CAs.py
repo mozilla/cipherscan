@@ -5,7 +5,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # Author: Hubert Kario - 2014
 
-from __future__ import division
+from __future__ import division, print_function
 
 path = "./results/"
 ca_certs_path = "./ca_files"
@@ -61,7 +61,7 @@ def get_path_for_hash(cert_hash):
     if not os.path.exists(f_name):
         f_name = ca_certs_path + '/' + cert_hash + '.pem'
         if not os.path.exists(f_name):
-            #print "File with hash " + c_hash + " is missing!"
+            #print("File with hash " + c_hash + " is missing!")
             return None
     return f_name
 
@@ -201,7 +201,7 @@ with open("parsed") as res_file:
         try:
             res = json.loads(line)
         except ValueError as e:
-            print "can't process line: " + line
+            print("can't process line: " + line)
             continue
 
         f=res
@@ -248,13 +248,13 @@ with open("parsed") as res_file:
             if server_chain_trusted:
                 if server_chain_complete:
                     chains["complete"] += 1
-                    print "complete: " + f['host']
+                    print("complete: " + f['host'])
                 else:
                     chains["incomplete"] += 1
-                    print "incomplete: " + f['host']
+                    print("incomplete: " + f['host'])
             else:
                 chains["untrusted"] += 1
-                print "untrusted: " + f['host']
+                print("untrusted: " + f['host'])
 
             if valid:
                 hosts += 1
@@ -276,9 +276,9 @@ with open("parsed") as res_file:
             continue
 
 """ Display stats """
-#print "openssl invocations: " + str(invocations["openssl"])
+#print("openssl invocations: " + str(invocations["openssl"]))
 
-print "Statistics from " + str(total) + " chains provided by " + str(hosts) + " hosts"
+print("Statistics from " + str(total) + " chains provided by " + str(hosts) + " hosts")
 
 print("\nServer provided chains    Count     Percent")
 print("-------------------------+---------+-------")

@@ -5,6 +5,8 @@
 #
 # Contributor: Julien Vehent jvehent@mozilla.com [:ulfr]
 
+from __future__ import print_function
+
 import sys, os, json, subprocess, logging, argparse, platform
 from collections import namedtuple
 from datetime import datetime
@@ -319,8 +321,8 @@ def process_results(data, level=None, do_json=False, do_nagios=False):
         level='none'
     try:
         results = json.loads(data)
-    except ValueError, e:
-        print("invalid json data")
+    except ValueError as e:
+        print("invalid json data: " + str(e))
     try:
         if results:
             if do_json:
@@ -342,12 +344,13 @@ def process_results(data, level=None, do_json=False, do_nagios=False):
                         print("and complies with the '" + level + "' level")
                     else:
                         print("and DOES NOT comply with the '" + level + "' level")
-    except TypeError, e:
+    except TypeError as e:
+        print("Error processing data: " + str(e))
         return False
 
     if do_json:
         json_output['failures'] = deepcopy(failures)
-        print json.dumps(json_output)
+        print(json.dumps(json_output))
         return True
 
     if len(failures['fubar']) > 0:
@@ -419,16 +422,20 @@ def build_ciphers_lists(opensslbin):
 
     logging.debug('Loading all ciphers: ' + allC)
     all_ciphers = subprocess.Popen([opensslbin, 'ciphers', allC],
-        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
+        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
+    all_ciphers = str(all_ciphers).split(":")
     logging.debug('Loading old ciphers: ' + oldC)
     old_ciphers = subprocess.Popen([opensslbin, 'ciphers', oldC],
-        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
+        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
+    old_ciphers = str(old_ciphers).split(':')
     logging.debug('Loading intermediate ciphers: ' + intC)
     intermediate_ciphers = subprocess.Popen([opensslbin, 'ciphers', intC],
-        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
+        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
+    intermediate_ciphers = str(intermediate_ciphers).split(':')
     logging.debug('Loading modern ciphers: ' + modernC)
     modern_ciphers = subprocess.Popen([opensslbin, 'ciphers', modernC],
-        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip().split(':')
+        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
+    modern_ciphers = str(modern_ciphers).split(':')
     blackhole.close()
 
 def main():
@@ -481,7 +488,7 @@ def main():
             data = subprocess.check_output([mypath + '/cipherscan', '-o', args.openssl, '-j', args.target])
         else:
             data = subprocess.check_output([mypath + '/cipherscan', '-j', args.target])
-        exit_status=process_results(data, args.level, args.json, args.nagios)
+        exit_status=process_results(str(data), args.level, args.json, args.nagios)
     else:
         if os.fstat(args.infile.fileno()).st_size < 2:
             logging.error("invalid input file")
