@@ -6,7 +6,7 @@
 # Author: Julien Vehent [:ulfr] - 2013
 # Contributors: Hubert Kario - 2014
 
-from __future__ import division
+from __future__ import division, print_function
 
 path = "./results/"
 
