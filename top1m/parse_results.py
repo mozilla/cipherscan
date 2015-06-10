@@ -49,6 +49,24 @@ client_ciphers['FF 29']=[
         'RC4-SHA',
         'RC4-MD5']
 
+client_ciphers['FF 35']=[
+        'ECDHE-ECDSA-AES128-GCM-SHA256',
+        'ECDHE-RSA-AES128-GCM-SHA256',
+        'ECDHE-ECDSA-AES256-SHA',
+        'ECDHE-ECDSA-AES128-SHA',
+        'ECDHE-RSA-AES128-SHA',
+        'ECDHE-RSA-AES256-SHA',
+        'ECDHE-ECDSA-RC4-SHA',
+        'ECDHE-RSA-RC4-SHA',
+        'DHE-RSA-AES128-SHA',
+        'DHE-DSS-AES128-SHA',
+        'DHE-RSA-AES256-SHA',
+        'AES128-SHA',
+        'AES256-SHA',
+        'DES-CBC3-SHA',
+        'RC4-SHA',
+        'RC4-MD5']
+
 report_untrused=False
 
 cipherstats = defaultdict(int)
@@ -97,6 +115,7 @@ for r,d,flist in os.walk(path):
         tempcipherstats = {}
         ciphertypes = 0
         AESGCM = False
+        AESCBC = False
         AES = False
         CHACHA20 = False
         DES3 = False
@@ -190,18 +209,24 @@ for r,d,flist in os.walk(path):
                         temp_client_incompat[client_name][entry['cipher']] = 1
 
                 """ store the ciphers supported """
-                if 'ADH' in entry['cipher'] or 'AECDH' in entry['cipher']:
+                if 'ADH' in entry['cipher'] or 'AECDH' in entry['cipher'] or \
+                        'EXP' in entry['cipher'] or \
+                        'DES-CBC3-MD5' in entry['cipher'] or \
+                        'RC4-64-MD5' in entry['cipher'] or \
+                        'IDEA-CBC-MD5' in entry['cipher']:
                     ciphertypes += 1
                     name = "z:" + entry['cipher']
                     tempcipherstats[name] = 1
                     tempcipherstats['Insecure'] = 1
                 elif 'AES128-GCM' in entry['cipher'] or 'AES256-GCM' in entry['cipher']:
                     if not AESGCM:
+                        AES = True
                         AESGCM = True
                         ciphertypes += 1
                 elif 'AES' in entry['cipher']:
-                    if not AES:
+                    if not AESCBC:
                         AES = True
+                        AESCBC = True
                         ciphertypes += 1
                 elif 'DES-CBC3' in entry['cipher']:
                     if not DES3:
@@ -235,16 +260,18 @@ for r,d,flist in os.walk(path):
                     tempcipherstats['Insecure'] = 1
 
                 """ store key handshake methods """
-                if 'ECDHE' in entry['cipher']:
+                if 'EXP' in entry['cipher']:
+                    pass
+                elif 'AECDH' in entry['cipher']:
+                    AECDH = True
+                elif 'ADH' in entry['cipher']:
+                    ADH = True
+                elif 'ECDHE' in entry['cipher']:
                     ECDHE = True
                     temppfsstats[entry['pfs']] = 1
                 elif 'DHE' in entry['cipher'] or 'EDH' in entry['cipher']:
                     DHE = True
                     temppfsstats[entry['pfs']] = 1
-                elif 'AECDH' in entry['cipher']:
-                    AECDH = True
-                elif 'ADH' in entry['cipher']:
-                    ADH = True
                 elif 'ECDH' in entry['cipher']:
                     ECDH = True
                 elif 'DH' in entry['cipher']:
@@ -393,10 +420,12 @@ for r,d,flist in os.walk(path):
                 cipherstats['AES-GCM Only'] += 1
         if AES:
             cipherstats['AES'] += 1
+        if AESCBC:
+            cipherstats['AES-CBC'] += 1
             if ciphertypes == 1:
                 cipherstats['AES-CBC Only'] += 1
-        if (AES and ciphertypes == 1) or (AESGCM and ciphertypes == 1)\
-            or (AES and AESGCM and ciphertypes == 2):
+        if (AESCBC and ciphertypes == 1) or (AESGCM and ciphertypes == 1)\
+            or (AESCBC and AESGCM and ciphertypes == 2):
                 cipherstats['AES Only'] += 1
         if CHACHA20:
             cipherstats['CHACHA20'] += 1
@@ -432,11 +461,11 @@ for r,d,flist in os.walk(path):
 
                 client_selected_cipherstats[client_name][client_selected[client_name]] += 1
 
-                if client_RC4_Only[client_name] and ciphertypes != 1:
+                if client_RC4_Only[client_name]:
                     cipherstats['x:' + client_name + ' RC4 Only'] += 1
                     for cipher in temp_client_incompat[client_name]:
                         client_RC4_Only_cipherstats[client_name][cipher] += 1
-                if client_RC4_Pref[client_name] and not 'RC4' in results['ciphersuite'][0]['cipher']:
+                if client_RC4_Pref[client_name]:
                     cipherstats['x:' + client_name + ' RC4 Preferred'] += 1
                     for cipher in temp_client_incompat[client_name]:
                         client_RC4_preferred_cipherstats[client_name][cipher] += 1
@@ -477,10 +506,14 @@ for r,d,flist in os.walk(path):
             protocolstats['SSL3'] += 1
             if not SSL2 and not TLS1 and not TLS1_1 and not TLS1_2:
                 protocolstats['SSL3 Only'] += 1
+            if not TLS1 and not TLS1_1 and not TLS1_2:
+                protocolstats['SSL3 or lower Only'] += 1
         if TLS1:
             protocolstats['TLS1'] += 1
             if not SSL2 and not SSL3 and not TLS1_1 and not TLS1_2:
                 protocolstats['TLS1 Only'] += 1
+            if not TLS1_1 and not TLS1_2:
+                protocolstats['TLS1 or lower Only'] += 1
         if not SSL2 and (SSL3 or TLS1) and not TLS1_1 and not TLS1_2:
             protocolstats['SSL3 or TLS1 Only'] += 1
         if not SSL2 and not SSL3 and not TLS1:
@@ -503,10 +536,6 @@ for r,d,flist in os.walk(path):
 """ The 'x:' + client_name + ' RC4 Preferred' counts only sites that
     effectively prefer RC4 when using given client, to make reporting more
     readable, sum it with sites that do that for all ciphers"""
-
-for client_name in client_ciphers:
-    if 'x:' + client_name + ' RC4 Preferred' in cipherstats and 'RC4 Preferred' in cipherstats:
-        cipherstats['x:' + client_name + ' RC4 Preferred'] += cipherstats['RC4 Preferred']
 
 print("SSL/TLS survey of %i websites from Alexa's top 1 million" % total)
 if report_untrused == False:
@@ -606,6 +635,8 @@ for stat in sorted(keysize):
     percent = round(keysize[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(keysize[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
+if total == 0:
+    total = 1
 sys.stdout.write("RSA/ECDSA Dual Stack".ljust(25) + " " + str(dsarsastack).ljust(10) + str(round(dsarsastack/total * 100, 4)) + "\n")
 
 print("\nOCSP stapling             Count     Percent ")
