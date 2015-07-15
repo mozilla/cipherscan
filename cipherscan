@@ -386,6 +386,10 @@ test_cipher_on_target() {
         ratelimit
         debug echo \"Q\" \| $cmnd $tls_version
         local tmp=$(echo "Q" | $cmnd $tls_version 1>/dev/stdout 2>/dev/null)
+        if ! [ -z "$tmp" ] ; then
+            verbose "response received from server"
+            couldconnect=true
+        fi
 
         parse_openssl_output <<<"$tmp"
         verbose "selected cipher is '$current_cipher'"
@@ -554,7 +558,6 @@ bench_cipher() {
 # Connect to the target and retrieve the chosen cipher
 # recursively until the connection fails
 get_cipher_pref() {
-    [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
     local ciphersuite="$1"
 
     local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
@@ -570,6 +573,7 @@ get_cipher_pref() {
     local success=$?
     # If the connection succeeded with the current cipher, benchmark and store
     if [ $success -eq 0 ]; then
+        [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
         cipherspref=("${cipherspref[@]}" "$result")
         ciphercertificates=("${ciphercertificates[@]}" "$certificates")
         pciph=($result)
@@ -1100,9 +1104,14 @@ debug "sclientargs: $SCLIENTARGS"
 cipherspref=();
 ciphercertificates=()
 results=()
+couldconnect=false
 
 # Call to the recursive loop that retrieves the cipher preferences
 get_cipher_pref $CIPHERSUITE
+if ! $couldconnect; then
+    echo "Could not connect to $TARGET"
+    exit 1
+fi
 
 # in case the server is intolerant to our big hello, try again with
 # a smaller one
