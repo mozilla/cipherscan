@@ -13,6 +13,7 @@ path = "./results/"
 import json
 import sys
 from collections import defaultdict
+import operator
 import os
 import re
 
@@ -94,6 +95,46 @@ eccfallback = defaultdict(int)
 eccordering = defaultdict(int)
 ecccurve = defaultdict(int)
 ocspstaple = defaultdict(int)
+fallbacks = defaultdict(int)
+# array with indexes of fallback names for the matrix report
+fallback_ids = defaultdict(int)
+i=0
+fallback_ids['big-SSLv3'] = i
+i+=1
+fallback_ids['big-TLSv1.0'] = i
+i+=1
+fallback_ids['big-TLSv1.1'] = i
+i+=1
+fallback_ids['big-TLSv1.2'] = i
+i+=1
+# padding space
+fallback_ids[' '] = i
+i+=1
+fallback_ids['small-SSLv3'] = i
+i+=1
+fallback_ids['small-TLSv1.0-notlsext'] = i
+i+=1
+fallback_ids['small-TLSv1.0'] = i
+i+=1
+fallback_ids['small-TLSv1.1'] = i
+i+=1
+fallback_ids['small-TLSv1.2'] = i
+i+=1
+# 2nd padding space
+fallback_ids['  '] = i
+i+=1
+fallback_ids['v2-small-SSLv3'] = i
+i+=1
+fallback_ids['v2-small-TLSv1.0'] = i
+i+=1
+fallback_ids['v2-small-TLSv1.1'] = i
+i+=1
+fallback_ids['v2-small-TLSv1.2'] = i
+i+=1
+fallback_ids['v2-big-TLSv1.2'] = i
+i+=1
+# 3rd padding space
+fallback_ids['   '] = i
 dsarsastack = 0
 total = 0
 for r,d,flist in os.walk(path):
@@ -111,6 +152,7 @@ for r,d,flist in os.walk(path):
         tempeccfallback = "unknown"
         tempeccordering = "unknown"
         tempecccurve = {}
+        tempfallbacks = {}
         """ supported ciphers by the server under scan """
         tempcipherstats = {}
         ciphertypes = 0
@@ -165,8 +207,31 @@ for r,d,flist in os.walk(path):
             except ValueError:
                 continue
 
+
             """ discard files with empty results """
             if len(results['ciphersuite']) < 1:
+                # if there are no results from regular scan but there are
+                # from fallback attempts that means that the scan of a host
+                # is inconclusive
+                if 'configs' in results:
+                    tolerance = [' '] * len(fallback_ids)
+                    for entry in results['configs']:
+                        config = results['configs'][entry]
+                        if config['tolerant'] == "True" and \
+                                config['trusted'] == "True":
+
+                            # save which protocols passed
+                            if entry in fallback_ids:
+                                tolerance[fallback_ids[entry]] = 'v'
+                            else:
+                                fallback_ids[entry] = len(fallback_ids)
+                                tolerance.insert(fallback_ids[entry], 'v')
+
+                    # analysis of host won't be continued, so we have to add
+                    # results to the permanent, not temporary table, but
+                    # do that only when there actually were detected values
+                    if "".join(tolerance).strip():
+                        fallbacks["".join(tolerance).rstrip()] += 1
                 continue
 
             """ save ECC fallback (new format) """
@@ -183,6 +248,56 @@ for r,d,flist in os.walk(path):
                     tempecccurve[curve] = 1
                 if len(results['curve']) == 1:
                     tempecccurve[curve + ' Only'] = 1
+
+            if 'configs' in results:
+                tolerance = [' '] * len(fallback_ids)
+                for entry in results['configs']:
+                    config = results['configs'][entry]
+
+                    if not entry in fallback_ids:
+                        fallback_ids[entry] = len(fallback_ids)
+                        tolerance.insert(fallback_ids[entry], ' ')
+
+                    if config['tolerant'] == "True":
+                        tolerance[fallback_ids[entry]] = 'v'
+                    else:
+                        tolerance[fallback_ids[entry]] = 'X'
+                tempfallbacks["".join(tolerance).rstrip()] = 1
+                configs = results['configs']
+                try:
+                    if configs['big-TLSv1.1']['tolerant'] != "True" and \
+                            configs['big-TLSv1.2']['tolerant'] != "True" and \
+                            configs['small-TLSv1.1']['tolerant'] != "True" and \
+                            configs['small-TLSv1.2']['tolerant'] != "True":
+                        if configs['v2-small-TLSv1.1']['tolerant'] != "True" and \
+                                configs['v2-small-TLSv1.2']['tolerant'] != "True":
+                            tempfallbacks['TLSv1.1+ strict Intolerance'] = 1
+                        else:
+                            tempfallbacks['TLSv1.1+ Intolerant'] = 1
+                    if configs['big-TLSv1.1']['tolerant'] == "True" and \
+                            configs['big-TLSv1.2']['tolerant'] != "True" and \
+                            configs['small-TLSv1.1']['tolerant'] == "True" and \
+                            configs['small-TLSv1.2']['tolerant'] != "True":
+                        if configs['v2-small-TLSv1.2']['tolerant'] != "True":
+                            tempfallbacks['TLSv1.2 strict Intolerance'] = 1
+                        else:
+                            tempfallbacks['TLSv1.2 Intolerant'] = 1
+                    if configs['big-TLSv1.2']['tolerant'] != "True" and \
+                            configs['big-TLSv1.1']['tolerant'] == "True" and \
+                            configs['small-TLSv1.2']['tolerant'] == "True":
+                        tempfallbacks['TLSv1.2 big Intolerance'] = 1
+                    if configs['big-TLSv1.2']['tolerant'] != "True" and \
+                            configs['small-TLSv1.0']['tolerant'] != "True" and \
+                            configs['small-TLSv1.0-notlsext']['tolerant'] == "True":
+                        tempfallbacks['TLS extension Intolerance'] = 1
+                    if configs['big-TLSv1.2']['tolerant'] != "True" and \
+                            configs['big-TLSv1.1']['tolerant'] != "True" and \
+                            configs['big-TLSv1.0']['tolerant'] != "True" and \
+                            (configs['small-TLSv1.2']['tolerant'] == "True" or
+                                    configs['v2-small-TLSv1.2']['tolerant'] == "True"):
+                        tempfallbacks['Big handshake intolerance'] = 1
+                except KeyError:
+                    pass
 
             """ loop over list of ciphers """
             for entry in results['ciphersuite']:
@@ -391,6 +506,9 @@ for r,d,flist in os.walk(path):
                             if 'RC4' in cipher:
                                 client_RC4_Pref[client_name] = True
                             break
+
+        for s in tempfallbacks:
+            fallbacks[s] += 1
 
         for s in tempsigstats:
             sigalg[s] += 1
@@ -650,3 +768,17 @@ print("-------------------------+---------+-------")
 for stat in sorted(protocolstats):
     percent = round(protocolstats[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(25) + " " + str(protocolstats[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+print("\nRequired fallbacks                       Count     Percent")
+print("----------------------------------------+---------+-------")
+print("big  small v2   ")
+print("----+-----+-----+------------------------+---------+-------")
+for stat in sorted(fallbacks):
+    percent = round(fallbacks[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(40) + " " + str(fallbacks[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+print("\nFallback column names")
+print("------------------------")
+fallback_ids_sorted=sorted(fallback_ids.items(), key=operator.itemgetter(1))
+for touple in fallback_ids_sorted:
+    print(str(touple[1]+1).rjust(3) + "  " + str(touple[0]))
