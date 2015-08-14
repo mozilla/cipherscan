@@ -55,7 +55,7 @@ def is_fubar(results):
             fubar = True
         if int(conn['pubkey'][0]) < 2048:
             has_wrong_pubkey = True
-            logging.debug(conn['pubkey'] + ' is a fubar pubkey size')
+            logging.debug(conn['pubkey'][0] + ' is a fubar pubkey size')
             fubar = True
         if conn['pfs'] != 'None':
             if not has_good_pfs(conn['pfs'], 1024, 160):
