@@ -12,6 +12,11 @@ from collections import namedtuple
 from datetime import datetime
 from copy import deepcopy
 
+def str_compat(data):
+    if sys.version_info >= (3,0):
+        data = str(data, 'utf-8')
+    return data
+
 # has_good_pfs compares a given PFS configuration with a target
 # dh parameter a target elliptic curve, and return true if good
 # if `must_match` is True, the exact values are expected, if not
@@ -423,18 +428,22 @@ def build_ciphers_lists(opensslbin):
     logging.debug('Loading all ciphers: ' + allC)
     all_ciphers = subprocess.Popen([opensslbin, 'ciphers', allC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
+    all_ciphers = str_compat(all_ciphers)
     all_ciphers = str(all_ciphers).split(":")
     logging.debug('Loading old ciphers: ' + oldC)
     old_ciphers = subprocess.Popen([opensslbin, 'ciphers', oldC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
+    old_ciphers = str_compat(old_ciphers)
     old_ciphers = str(old_ciphers).split(':')
     logging.debug('Loading intermediate ciphers: ' + intC)
     intermediate_ciphers = subprocess.Popen([opensslbin, 'ciphers', intC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
+    intermediate_ciphers = str_compat(intermediate_ciphers)
     intermediate_ciphers = str(intermediate_ciphers).split(':')
     logging.debug('Loading modern ciphers: ' + modernC)
     modern_ciphers = subprocess.Popen([opensslbin, 'ciphers', modernC],
         stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
+    modern_ciphers = str_compat(modern_ciphers)
     modern_ciphers = str(modern_ciphers).split(':')
     blackhole.close()
 
@@ -488,6 +497,7 @@ def main():
             data = subprocess.check_output([mypath + '/cipherscan', '-o', args.openssl, '-j', args.target])
         else:
             data = subprocess.check_output([mypath + '/cipherscan', '-j', args.target])
+        data = str_compat(data)
         exit_status=process_results(str(data), args.level, args.json, args.nagios)
     else:
         if os.fstat(args.infile.fileno()).st_size < 2:
