@@ -42,11 +42,6 @@ if [[ "$TIMEOUTOUTPUT" =~ BusyBox ]]; then
     TIMEOUTBIN="$TIMEOUTBIN -t"
 fi
 
-# use custom config file to enable GOST ciphers
-if [[ -e $(dirname $0)/openssl.cnf ]]; then
-    export OPENSSL_CONF="$(dirname $0)/openssl.cnf"
-fi
-
 # find a list of trusted CAs on the local system, or use the provided list
 if [ -z "$CACERTS" ]; then
     for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
@@ -1369,7 +1364,33 @@ if [ ! -x $OPENSSLBIN ]; then
     if [ "$OUTPUTFORMAT" == "terminal" ]; then
         echo "custom openssl not executable, falling back to system one from $OPENSSLBIN"
     fi
+else
+    tmp=$(echo "quit" | $OPENSSLBIN 2>&1)
+    if [ $? -ne 0 ]; then
+        OPENSSLBIN=$(which openssl)
+        if [ "$OUTPUTFORMAT" == "terminal" ]; then
+            echo "custom openssl fails to execute properly, falling back to system one from $OPENSSLBIN"
+            verbose "execution failure message: $tmp"
+        fi
+    fi
 fi
+
+# use custom config file to enable GOST ciphers if supported by whatever $OPENSSLBIN we ended up with
+if [[ -e $(dirname $0)/openssl.cnf ]]; then
+    tmp=$(OPENSSL_CONF="$(dirname $0)/openssl.cnf" $OPENSSLBIN s_client -help 2>&1 | grep :error:)
+    if [ -z "$tmp" ]; then
+        export OPENSSL_CONF="$(dirname $0)/openssl.cnf"
+        if [ "$OUTPUTFORMAT" == "terminal" ]; then
+            verbose "Enabling GOST ciphers via OPENSSL_CONF"
+        fi
+    else
+        if [ "$OUTPUTFORMAT" == "terminal" ]; then
+            echo "Not enabling GOST ciphers via OPENSSL_CONF due to errors: see verbose for details"
+            verbose "GOST config failed: $tmp"
+        fi
+    fi
+fi
+
 
 if [ $TEST_CURVES == "True" ]; then
     if [ ! -z "$($OPENSSLBIN s_client -curves 2>&1|head -1|grep 'unknown option')" ]; then
