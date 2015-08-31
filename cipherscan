@@ -1335,11 +1335,11 @@ do
             shift
             break
             ;;
-        # -*)
-        #     UNKNOWNOPTIONS=$((UNKNOWNOPTIONS+$1))
-        #     # echo "WARN: Unknown option (ignored): $1" >&2
-        #     shift
-        #     ;;
+        -*)
+            UNKNOWNOPTIONS=$((UNKNOWNOPTIONS+$1))
+            echo "$0: Unknown option: $1" >&2
+            exit 1
+            ;;
         *)  # no more options we understand.
             break
             ;;
