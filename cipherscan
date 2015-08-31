@@ -631,6 +631,10 @@ display_results_in_terminal() {
     local curvesordering
     local different=False
     echo "Target: $TARGET"; echo
+    if [[ ${#cipherspref[*]} -lt 1 ]]; then
+        echo "No ciphers detected! Aborting."
+        exit 1
+    fi
     for cipher in "${cipherspref[@]}"; do
         # get first in array
         pciph=($cipher)
