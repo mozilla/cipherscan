@@ -14,9 +14,10 @@ DIRNAMEPATH=$(dirname "$0")
 REALPATH="$DIRNAMEPATH"
 # make sure this doesn't error out when readlink -f isn't available (OSX)
 readlink -f "$0" &>/dev/null && REALPATH=$(dirname "$(readlink -f "$0")")
-OPENSSLBIN="${REALPATH}/openssl"
 if [[ "$(uname -s)" == "Darwin" ]]; then
     OPENSSLBIN="${REALPATH}/openssl-darwin64"
+else
+    OPENSSLBIN="${REALPATH}/openssl"
 fi
 
 # cipherscan requires bash4, which doesn't come by default in OSX
