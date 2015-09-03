@@ -137,7 +137,7 @@ TIMEOUT=30
 # trust anchors are stored
 CAPATH=""
 SAVECRT=""
-TEST_CURVES="False"
+TEST_CURVES="True"
 has_curves="False"
 # openssl formated list of curves that will cause server to select ECC suite
 ecc_ciphers=""
