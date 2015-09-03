@@ -938,7 +938,7 @@ test_curves() {
     #
 
     local tmp_curves=(${current_curves//,/ })
-    verbose "Server supported curves: ${tmp_curves[@]}"
+    verbose "Server supported curves: ${tmp_curves[*]}"
 
     # server supports just one or none, so it effectively uses server side
     # ordering (as it dictates what curves client must support)
@@ -965,7 +965,7 @@ test_curves() {
         else
             local ephem_data=(${current_pfs//,/ })
             verbose "Server selected $current_cipher with $current_pfs"
-            verbose "ephem_data: ${ephem_data[@]}"
+            verbose "ephem_data: ${ephem_data[*]}"
 
             if [[ ${ephem_data[0]} =~ ECDH ]]; then
                 verbose "Server did select ${ephem_data[1]} curve"
