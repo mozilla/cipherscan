@@ -66,68 +66,68 @@ CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
 # some servers are intolerant to large client hello, try a shorter list of
 # ciphers with them
 SHORTCIPHERSUITE=(
-        'ECDHE-ECDSA-AES128-GCM-SHA256'
-        'ECDHE-RSA-AES128-GCM-SHA256'
-        'ECDHE-RSA-AES256-GCM-SHA384'
-        'ECDHE-ECDSA-AES256-SHA'
-        'ECDHE-ECDSA-AES128-SHA'
-        'ECDHE-RSA-AES128-SHA'
-        'ECDHE-RSA-AES256-SHA'
-        'ECDHE-RSA-DES-CBC3-SHA'
-        'ECDHE-ECDSA-RC4-SHA'
-        'ECDHE-RSA-RC4-SHA'
-        'DHE-RSA-AES128-SHA'
-        'DHE-DSS-AES128-SHA'
-        'DHE-RSA-CAMELLIA128-SHA'
-        'DHE-RSA-AES256-SHA'
-        'DHE-DSS-AES256-SHA'
-        'DHE-RSA-CAMELLIA256-SHA'
-        'EDH-RSA-DES-CBC3-SHA'
-        'AES128-SHA'
-        'CAMELLIA128-SHA'
-        'AES256-SHA'
-        'CAMELLIA256-SHA'
-        'DES-CBC3-SHA'
-        'RC4-SHA'
-        'RC4-MD5'
+    'ECDHE-ECDSA-AES128-GCM-SHA256'
+    'ECDHE-RSA-AES128-GCM-SHA256'
+    'ECDHE-RSA-AES256-GCM-SHA384'
+    'ECDHE-ECDSA-AES256-SHA'
+    'ECDHE-ECDSA-AES128-SHA'
+    'ECDHE-RSA-AES128-SHA'
+    'ECDHE-RSA-AES256-SHA'
+    'ECDHE-RSA-DES-CBC3-SHA'
+    'ECDHE-ECDSA-RC4-SHA'
+    'ECDHE-RSA-RC4-SHA'
+    'DHE-RSA-AES128-SHA'
+    'DHE-DSS-AES128-SHA'
+    'DHE-RSA-CAMELLIA128-SHA'
+    'DHE-RSA-AES256-SHA'
+    'DHE-DSS-AES256-SHA'
+    'DHE-RSA-CAMELLIA256-SHA'
+    'EDH-RSA-DES-CBC3-SHA'
+    'AES128-SHA'
+    'CAMELLIA128-SHA'
+    'AES256-SHA'
+    'CAMELLIA256-SHA'
+    'DES-CBC3-SHA'
+    'RC4-SHA'
+    'RC4-MD5'
 )
 # as some servers are intolerant to large client hello's (or ones that have
 # RC4 ciphers below position 64), use the following for cipher testing in case
 # of problems
 FALLBACKCIPHERSUITE=(
-        'ECDHE-RSA-AES128-GCM-SHA256'
-        'ECDHE-RSA-AES128-SHA256'
-        'ECDHE-RSA-AES128-SHA'
-        'ECDHE-RSA-DES-CBC3-SHA'
-        'ECDHE-RSA-RC4-SHA'
-        'DHE-RSA-AES128-SHA'
-        'DHE-DSS-AES128-SHA'
-        'DHE-RSA-CAMELLIA128-SHA'
-        'DHE-RSA-AES256-SHA'
-        'DHE-DSS-AES256-SHA'
-        'DHE-RSA-CAMELLIA256-SHA'
-        'EDH-RSA-DES-CBC3-SHA'
-        'AES128-SHA'
-        'CAMELLIA128-SHA'
-        'AES256-SHA'
-        'CAMELLIA256-SHA'
-        'DES-CBC3-SHA'
-        'RC4-SHA'
-        'RC4-MD5'
-        'SEED-SHA'
-        'IDEA-CBC-SHA'
-        'IDEA-CBC-MD5'
-        'RC2-CBC-MD5'
-        'DES-CBC3-MD5'
-        'EXP1024-DHE-DSS-DES-CBC-SHA'
-        'EDH-RSA-DES-CBC-SHA'
-        'EXP1024-DES-CBC-SHA'
-        'DES-CBC-MD5'
-        'EXP1024-RC4-SHA'
-        'EXP-EDH-RSA-DES-CBC-SHA'
-        'EXP-DES-CBC-SHA'
-        'EXP-RC2-CBC-MD5'
-        'EXP-RC4-MD5'
+    'ECDHE-RSA-AES128-GCM-SHA256'
+    'ECDHE-RSA-AES128-SHA256'
+    'ECDHE-RSA-AES128-SHA'
+    'ECDHE-RSA-DES-CBC3-SHA'
+    'ECDHE-RSA-RC4-SHA'
+    'DHE-RSA-AES128-SHA'
+    'DHE-DSS-AES128-SHA'
+    'DHE-RSA-CAMELLIA128-SHA'
+    'DHE-RSA-AES256-SHA'
+    'DHE-DSS-AES256-SHA'
+    'DHE-RSA-CAMELLIA256-SHA'
+    'EDH-RSA-DES-CBC3-SHA'
+    'AES128-SHA'
+    'CAMELLIA128-SHA'
+    'AES256-SHA'
+    'CAMELLIA256-SHA'
+    'DES-CBC3-SHA'
+    'RC4-SHA'
+    'RC4-MD5'
+    'SEED-SHA'
+    'IDEA-CBC-SHA'
+    'IDEA-CBC-MD5'
+    'RC2-CBC-MD5'
+    'DES-CBC3-MD5'
+    'EXP1024-DHE-DSS-DES-CBC-SHA'
+    'EDH-RSA-DES-CBC-SHA'
+    'EXP1024-DES-CBC-SHA'
+    'DES-CBC-MD5'
+    'EXP1024-RC4-SHA'
+    'EXP-EDH-RSA-DES-CBC-SHA'
+    'EXP-DES-CBC-SHA'
+    'EXP-RC2-CBC-MD5'
+    'EXP-RC4-MD5'
 )
 DEBUG=0
 VERBOSE=0
@@ -208,54 +208,54 @@ debug(){
 
 # obtain an array of curves supported by openssl
 CURVES=(
-    sect163k1 # K-163
-    sect163r1
-    sect163r2 # B-163
-    sect193r1
-    sect193r2
-    sect233k1 # K-233
-    sect233r1 # B-233
-    sect239k1
-    sect283k1 # K-283
-    sect283r1 # B-283
-    sect409k1 # K-409
-    sect409r1 # B-409
-    sect571k1 # K-571
-    sect571r1 # B-571
-    secp160k1
-    secp160r1
-    secp160r2
-    secp192k1
-    prime192v1 # P-192 secp192r1
-    secp224k1
-    secp224r1 # P-224
-    secp256k1
-    prime256v1 # P-256 secp256r1
-    secp384r1 # P-384
-    secp521r1 # P-521
-    brainpoolP256r1
-    brainpoolP384r1
-    brainpoolP512r1
+    'sect163k1' # K-163
+    'sect163r1'
+    'sect163r2' # B-163
+    'sect193r1'
+    'sect193r2'
+    'sect233k1' # K-233
+    'sect233r1' # B-233
+    'sect239k1'
+    'sect283k1' # K-283
+    'sect283r1' # B-283
+    'sect409k1' # K-409
+    'sect409r1' # B-409
+    'sect571k1' # K-571
+    'sect571r1' # B-571
+    'secp160k1'
+    'secp160r1'
+    'secp160r2'
+    'secp192k1'
+    'prime192v1' # P-192 secp192r1
+    'secp224k1'
+    'secp224r1' # P-224
+    'secp256k1'
+    'prime256v1' # P-256 secp256r1
+    'secp384r1' # P-384
+    'secp521r1' # P-521
+    'brainpoolP256r1'
+    'brainpoolP384r1'
+    'brainpoolP512r1'
 )
 
 # many curves have alternative names, this array provides a mapping to find the IANA
 # name of a curve using its alias
 CURVES_MAP=(
-      "sect163k1 K-163"
-      "sect163r2 B-163"
-      "sect233k1 K-233"
-      "sect233r1 B-233"
-      "sect283k1 K-283"
-      "sect283r1 B-283"
-      "sect409k1 K-409"
-      "sect409r1 B-409"
-      "sect571k1 K-571"
-      "sect571r1 B-571"
-      "prime192v1 P-192 secp192r1"
-      "secp224r1 P-224"
-      "prime256v1 P-256 secp256r1"
-      "secp384r1 P-384"
-      "secp521r1 P-521"
+    'sect163k1 K-163'
+    'sect163r2 B-163'
+    'sect233k1 K-233'
+    'sect233r1 B-233'
+    'sect283k1 K-283'
+    'sect283r1 B-283'
+    'sect409k1 K-409'
+    'sect409r1 B-409'
+    'sect571k1 K-571'
+    'sect571r1 B-571'
+    'prime192v1 P-192 secp192r1'
+    'secp224r1 P-224'
+    'prime256v1 P-256 secp256r1'
+    'secp384r1 P-384'
+    'secp521r1 P-521'
 )
 
 get_curve_name() {
