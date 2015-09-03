@@ -37,7 +37,7 @@ if [[ "$TIMEOUTBIN" == "" ]]; then
 fi
 
 # Check for busybox, which has different arguments
-TIMEOUTOUTPUT=$(($TIMEOUTBIN --help) 2>&1)
+TIMEOUTOUTPUT="$($TIMEOUTBIN --help 2>&1)"
 if [[ "$TIMEOUTOUTPUT" =~ BusyBox ]]; then
     TIMEOUTBIN="$TIMEOUTBIN -t"
 fi
