@@ -281,8 +281,12 @@ c_hash() {
         fi
         if [[ ! -e $1/${h}.${num} ]]; then
             # file doesn't exist, create a link
-            pushd "$1" > /dev/null
-            ln -s "$2" "${h}.${num}"
+            if pushd "$1" > /dev/null; then
+                ln -s "$2" "${h}.${num}"
+            else
+                echo "'pushd $1' failed unexpectedly, refusing to proceed" 1>&2
+                exit 1
+            fi
             popd > /dev/null
             break
         fi
