@@ -448,7 +448,7 @@ test_cipher_on_target() {
         local certificate_count=$certs_found
         debug "server presented $certificate_count certificates"
         local i
-        for ((i=0; i<$certificate_count; i=i+1 )); do
+        for ((i=0; i<certificate_count; i=i+1 )); do
 
             # extract i'th certificate
             local cert="${current_raw_certificates[$i]}"
@@ -600,7 +600,7 @@ bench_cipher() {
     local t="$(($(date +%s%N) - t))"
     verbose "Benchmarking done in $t nanoseconds"
     # Microseconds
-    cipherbenchms="$((t/1000/$BENCHMARKITER))"
+    cipherbenchms="$((t/1000/BENCHMARKITER))"
 }
 
 # Connect to the target and retrieve the chosen cipher
