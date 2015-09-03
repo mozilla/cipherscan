@@ -857,9 +857,6 @@ test_serverside_ordering() {
 }
 
 test_curves() {
-    # "True" if server supports ciphers that don't use ECC at a lower priority
-    local fallback_available="False"
-
     # return variable: list of curves supported by server, in order
     current_curves=""
     # return variable: check if server uses server side or client side ordering
@@ -985,8 +982,6 @@ test_curves() {
 }
 
 test_curves_fallback() {
-    # "True" if server supports ciphers that don't use ECC at a lower priority
-    local fallback_available="False"
     # return variable: whatever a server will fall back to non ECC suite when
     # client doesn't advertise support for curves the server needs
     fallback_supported="unknown"
