@@ -1280,7 +1280,7 @@ test_tls_tolerance() {
 
 # If no options are given, give usage information and exit (with error code)
 if [[ $# -eq 0 ]]; then
-   usage;
+   usage
    exit 1
 fi
 
@@ -1398,7 +1398,7 @@ SCLIENTARGS=$(sed -e s,${TEMPTARGET},,<<<"${@}")
 debug "sclientargs: $SCLIENTARGS"
 
 
-cipherspref=();
+cipherspref=()
 ciphercertificates=()
 results=()
 
