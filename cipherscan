@@ -14,12 +14,12 @@ REALPATH=$(dirname $0)
 # make sure this doesn't error out when readlink -f isn't available (OSX)
 readlink -f $0 &>/dev/null && REALPATH=$(dirname $(readlink -f $0))
 OPENSSLBIN="${REALPATH}/openssl"
-if [ "$(uname -s)" == "Darwin" ]; then
+if [[ "$(uname -s)" == "Darwin" ]]; then
     OPENSSLBIN="${REALPATH}/openssl-darwin64"
 fi
 
 # cipherscan requires bash4, which doesn't come by default in OSX
-if [ ${BASH_VERSINFO[0]} -lt 4 ]; then
+if [[ ${BASH_VERSINFO[0]} -lt 4 ]]; then
     echo "Bash version 4 is required to run cipherscan."
     echo "Please upgrade your version of bash (ex: brew install bash)."
     exit 1
@@ -28,9 +28,9 @@ fi
 # test that timeout or gtimeout (darwin) are present
 TIMEOUTBIN="$(which timeout)"
 
-if [ "$TIMEOUTBIN" == "" ]; then
+if [[ "$TIMEOUTBIN" == "" ]]; then
     TIMEOUTBIN="$(which gtimeout)"
-    if [ "$TIMEOUTBIN" == "" ]; then
+    if [[ "$TIMEOUTBIN" == "" ]]; then
         echo "neither timeout nor gtimeout are present. install coreutils with {apt-get,yum,brew} install coreutils"
         exit 1
     fi
@@ -48,15 +48,15 @@ if [[ -e $(dirname $0)/openssl.cnf ]]; then
 fi
 
 # find a list of trusted CAs on the local system, or use the provided list
-if [ -z "$CACERTS" ]; then
+if [[ -z "$CACERTS" ]]; then
     for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
-        if [ -e "$f" ]; then
+        if [[ -e "$f" ]]; then
             CACERTS="$f"
             break
         fi
     done
 fi
-if [ ! -e "$CACERTS" ]; then
+if [[ ! -e "$CACERTS" ]]; then
     CACERTS="$(dirname $0)/ca-bundle.crt"
 fi
 
@@ -192,13 +192,13 @@ EXAMPLES: $0 -starttls xmpp jabber.ccc.de:5222
 }
 
 verbose() {
-    if [ $VERBOSE != 0 ]; then
+    if [[ $VERBOSE != 0 ]]; then
         echo "$@" >&2
     fi
 }
 
 debug(){
-    if [ $DEBUG == 1 ]; then
+    if [[ $DEBUG == 1 ]]; then
         echo Debug: "$@" >&2
 	set -evx
     fi
@@ -416,7 +416,7 @@ test_cipher_on_target() {
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
         # -status exception is ignored in SSLv2, go figure
-        if [ "$tls_version" == "-ssl2" ]; then
+        if [[ "$tls_version" == "-ssl2" ]]; then
             if [[ "$sslcommand" =~ (.*)(-servername\ [^ ]*)(.*) ]]; then
                 cmnd="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
             else
@@ -447,7 +447,7 @@ test_cipher_on_target() {
             # compare the values not just checksums so that eventual collision
             # doesn't mess up results
             if [[ ${known_certs[$cksum]} == $cert ]]; then
-                if [ -n "${current_certificates}" ]; then
+                if [[ -n "${current_certificates}" ]]; then
                     current_certificates+=","
                 fi
                 current_certificates+="\"${cert_checksums[$cksum]}\""
@@ -498,7 +498,7 @@ test_cipher_on_target() {
                 fi
             fi
             # save the sha sum for reporting
-            if [ -n "${current_certificates}" ]; then
+            if [[ -n "${current_certificates}" ]]; then
                 current_certificates+=","
             fi
             current_certificates+="\"${sha256sum}\""
@@ -515,20 +515,20 @@ test_cipher_on_target() {
             verbose "connection successful; protocol: $current_protocol, cipher: $current_cipher, previous cipher: $previous_cipher"
         fi
         # handling of TLSv1.2 only cipher suites
-        if [ ! -z "$previous_cipher" ] && [ "$previous_cipher" != "$current_cipher" ] && [ "$current_cipher" != "0000" ]; then
+        if [[ ! -z "$previous_cipher" ]] && [[ "$previous_cipher" != "$current_cipher" ]] && [[ "$current_cipher" != "0000" ]]; then
             unset protocols
         fi
         previous_cipher=$current_cipher
 
         # connection succeeded, add TLS version to positive results
-        if [ -z "$protocols" ]; then
+        if [[ -z "$protocols" ]]; then
             protocols=$current_protocol
         else
             protocols="$protocols,$current_protocol"
         fi
         cipher=$current_cipher
         pfs=$current_pfs
-        [ -z $pfs ] && pfs="None"
+        [[ -z $pfs ]] && pfs="None"
         pubkey=$current_pubkey
         sigalg=$current_sigalg
         trusted=$current_trusted
@@ -539,13 +539,13 @@ test_cipher_on_target() {
     done
     # if cipher is empty, that means none of the TLS version worked with
     # the current cipher
-    if [ -z "$cipher" ]; then
+    if [[ -z "$cipher" ]]; then
         verbose "handshake failed, no ciphersuite was returned"
         result='ConnectionFailure'
         return 2
 
     # if cipher contains NONE, the cipher wasn't accepted
-    elif [ "$cipher" == '(NONE)  ' ]; then
+    elif [[ "$cipher" == '(NONE)  ' ]]; then
         result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
@@ -556,9 +556,9 @@ test_cipher_on_target() {
         # if pfs uses ECDH, test supported curves
         if [[ $pfs =~ ECDH ]]; then
             has_curves="True"
-            if [ $TEST_CURVES == "True" ]; then
+            if [[ $TEST_CURVES == "True" ]]; then
                 test_curves
-                if [ "$ecc_ciphers" != "" ]; then
+                if [[ "$ecc_ciphers" != "" ]]; then
                     ecc_ciphers+=":"
                 fi
                 ecc_ciphers+="$cipher"
@@ -582,7 +582,7 @@ bench_cipher() {
     for i in $(seq 1 $BENCHMARKITER); do
         debug Connection $i
         (echo "Q" | $sslcommand 2>/dev/null 1>/dev/null)
-        if [ $? -gt 0 ]; then
+        if [[ $? -gt 0 ]]; then
             break
         fi
     done
@@ -596,13 +596,13 @@ bench_cipher() {
 # Connect to the target and retrieve the chosen cipher
 # recursively until the connection fails
 get_cipher_pref() {
-    [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
+    [[ "$OUTPUTFORMAT" == "terminal" ]] && [[ $DEBUG -lt 1 ]] && echo -n '.'
     local ciphersuite="$1"
 
     local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
-    if [ -n "$CAPATH" ]; then
+    if [[ -n "$CAPATH" ]]; then
         sslcommand+=" -CApath $CAPATH -showcerts"
-    elif [ -e $CACERTS ]; then
+    elif [[ -e $CACERTS ]]; then
         sslcommand+=" -CAfile $CACERTS"
     fi
     sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
@@ -611,7 +611,7 @@ get_cipher_pref() {
     test_cipher_on_target "$sslcommand"
     local success=$?
     # If the connection succeeded with the current cipher, benchmark and store
-    if [ $success -eq 0 ]; then
+    if [[ $success -eq 0 ]]; then
         cipherspref=("${cipherspref[@]}" "$result")
         ciphercertificates=("${ciphercertificates[@]}" "$certificates")
         pciph=($result)
@@ -634,14 +634,14 @@ display_results_in_terminal() {
     for cipher in "${cipherspref[@]}"; do
         # get first in array
         pciph=($cipher)
-        if [ $DOBENCHMARK -eq 1 ]; then
+        if [[ $DOBENCHMARK -eq 1 ]]; then
             bench_cipher "$pciph"
             r="$ctr $cipher $cipherbenchms"
         else
             r="$ctr $cipher"
         fi
         local cipher_data=($cipher)
-        if [ $ctr -eq 1 ]; then
+        if [[ $ctr -eq 1 ]]; then
             pubkey="${cipher_data[2]}"
             sigalg="${cipher_data[3]}"
             trusted="${cipher_data[4]}"
@@ -651,19 +651,19 @@ display_results_in_terminal() {
                 curvesordering="${cipher_data[9]}"
             fi
         else
-            if [ "$pubkey" != "${cipher_data[2]}" ]; then
+            if [[ "$pubkey" != "${cipher_data[2]}" ]]; then
                 different=True
             fi
-            if [ "$sigalg" != "${cipher_data[3]}" ]; then
+            if [[ "$sigalg" != "${cipher_data[3]}" ]]; then
                 different=True
             fi
-            if [ "$trusted" != "${cipher_data[4]}" ]; then
+            if [[ "$trusted" != "${cipher_data[4]}" ]]; then
                 different=True
             fi
-            if [ "$tickethint" != "${cipher_data[5]}" ]; then
+            if [[ "$tickethint" != "${cipher_data[5]}" ]]; then
                 different=True
             fi
-            if [ "$ocspstaple" != "${cipher_data[6]}" ]; then
+            if [[ "$ocspstaple" != "${cipher_data[6]}" ]]; then
                 different=True
             fi
             if [[ "$curvesordering" == "" && "${cipher_data[9]}" != "" ]]; then
@@ -678,26 +678,26 @@ display_results_in_terminal() {
     done
 
     header="prio ciphersuite protocols"
-    if [ $different == "True" ]; then
+    if [[ $different == "True" ]]; then
         header+=" pubkey_size signature_algoritm trusted ticket_hint ocsp_staple"
     fi
     header+=" pfs"
-    if [ $has_curves == "True" ]; then
+    if [[ $has_curves == "True" ]]; then
         header+=" curves"
         if [[ $TEST_CURVES == "True" && $different == "True" ]]; then
             header+=" curves_ordering"
         fi
     fi
-    if [ $DOBENCHMARK -eq 1 ]; then
+    if [[ $DOBENCHMARK -eq 1 ]]; then
         header+=" avg_handshake_microsec"
     fi
     ctr=0
     for result in "${results[@]}"; do
-        if [ $ctr -eq 0 ]; then
+        if [[ $ctr -eq 0 ]]; then
             echo $header
             ctr=$((ctr+1))
         fi
-        if [ $different == "True" ]; then
+        if [[ $different == "True" ]]; then
             echo $result|grep -v '(NONE)'
         else
             # prints priority, ciphersuite, protocols and pfs
@@ -705,8 +705,8 @@ display_results_in_terminal() {
         fi
     done|column -t
     echo
-    if [ $different != "True" ]; then
-        if [ "$trusted" == "True" ]; then
+    if [[ $different != "True" ]]; then
+        if [[ "$trusted" == "True" ]]; then
             echo "Certificate: trusted, $pubkey bit, $sigalg signature"
         else
             echo "Certificate: UNTRUSTED, $pubkey bit, $sigalg signature"
@@ -723,7 +723,7 @@ display_results_in_terminal() {
     else
         echo "Cipher ordering: client"
     fi
-    if [ $TEST_CURVES == "True" ]; then
+    if [[ $TEST_CURVES == "True" ]]; then
         echo "Curves ordering: $curvesordering"
         echo "Curves fallback: $fallback_supported"
     fi
@@ -746,7 +746,7 @@ display_results_in_json() {
     echo -n "{\"target\":\"$TARGET\",\"utctimestamp\":\"$(date -u '+%FT%T.0Z')\",\"serverside\":\"${serverside}\",\"ciphersuite\": ["
     for cipher in "${cipherspref[@]}"; do
         local cipher_arr=($cipher)
-        [ $ctr -gt 0 ] && echo -n ','
+        [[ $ctr -gt 0 ]] && echo -n ','
         echo -n "{\"cipher\":\"${cipher_arr[0]}\","
         echo -n "\"protocols\":[\"${cipher_arr[1]//,/\",\"}\"],"
         echo -n "\"pubkey\":[\"${cipher_arr[2]//,/\",\"}\"],"
@@ -758,12 +758,12 @@ display_results_in_json() {
         echo -n "\"ticket_hint\":\"${cipher_arr[5]}\","
         echo -n "\"ocsp_stapling\":\"${cipher_arr[6]}\","
         pfs="${cipher_arr[7]}"
-        [ "$pfs" == "" ] && pfs="None"
+        [[ "$pfs" == "" ]] && pfs="None"
         echo -n "\"pfs\":\"$pfs\""
         if [[ "${cipher_arr[0]}" =~ ECDH ]]; then
             echo -n ","
             echo -n "\"curves\":[\"${cipher_arr[8]//,/\",\"}\"]"
-            if [ $TEST_CURVES == "True" ]; then
+            if [[ $TEST_CURVES == "True" ]]; then
                 echo -n ","
                 echo -n "\"curves_ordering\":\"${cipher_arr[9]}\""
             fi
@@ -772,14 +772,14 @@ display_results_in_json() {
         ctr=$((ctr+1))
     done
     echo -n ']'
-    if [ $TEST_CURVES == "True" ]; then
+    if [[ $TEST_CURVES == "True" ]]; then
         echo -n ",\"curves_fallback\":\"$fallback_supported\""
     fi
     echo -n ',"configs":{'
     ctr=0
     for test_name in "${!tls_tolerance[@]}"; do
         local result=(${tls_tolerance[$test_name]})
-        [ $ctr -gt 0 ] && echo -n ","
+        [[ $ctr -gt 0 ]] && echo -n ","
         echo -n "\"$test_name\":{"
         if [[ ${result[0]} == "False" ]]; then
             echo -n "\"tolerant\":\"False\""
@@ -826,15 +826,15 @@ test_serverside_ordering() {
     fi
 
     local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
-    if [ -n "$CAPATH" ]; then
+    if [[ -n "$CAPATH" ]]; then
         sslcommand+=" -CApath $CAPATH -showcerts"
-    elif [ -e "$CACERTS" ]; then
+    elif [[ -e "$CACERTS" ]]; then
         sslcommand+=" -CAfile $CACERTS"
     fi
     sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
 
     test_cipher_on_target "$sslcommand"
-    if [ $? -ne 0 ]; then
+    if [[ $? -ne 0 ]]; then
         serverside="True"
     else
         local selected=($result)
@@ -866,9 +866,9 @@ test_curves() {
     # prepare the ssl command we'll be using
     local sslcommand=""
     sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
-    if [ -n "$CAPATH" ]; then
+    if [[ -n "$CAPATH" ]]; then
         sslcommand+=" -CApath $CAPATH -showcerts"
-    elif [ -e "$CACERTS" ]; then
+    elif [[ -e "$CACERTS" ]]; then
         sslcommand+=" -CAfile $CACERTS"
     fi
     sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $current_cipher"
@@ -900,7 +900,7 @@ test_curves() {
             local ephem_data=(${current_pfs//,/ })
             local cname=""
             if [[ ${ephem_data[0]} =~ ECDH ]]; then
-                if [ "$current_curves" != "" ]; then
+                if [[ "$current_curves" != "" ]]; then
                     current_curves+=","
                 fi
                 cname="$(get_curve_name ${ephem_data[1]})"
@@ -908,14 +908,14 @@ test_curves() {
                 current_curves+="$cname"
             fi
             for id in "${!curves[@]}"; do
-                if [ "$cname" == ${curves[$id]} ]; then
+                if [[ "$cname" == ${curves[$id]} ]]; then
                     # we know it's supported, remove it from set of offered ones
                     unset curves[$id]
                     break
                 fi
             done
         fi
-        [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
+        [[ "$OUTPUTFORMAT" == "terminal" ]] && [[ $DEBUG -lt 1 ]] && echo -n '.'
     done
 
     # don't penalize servers that will negotiate all curves we know of...
@@ -932,7 +932,7 @@ test_curves() {
 
     # server supports just one or none, so it effectively uses server side
     # ordering (as it dictates what curves client must support)
-    if [ ${#tmp_curves[@]} -lt 2 ]; then
+    if [[ ${#tmp_curves[@]} -lt 2 ]]; then
         curves_ordering="server"
     else
         # server supports at least 2 curves, rotate their order, see if
@@ -961,7 +961,7 @@ test_curves() {
                 verbose "Server did select ${ephem_data[1]} curve"
                 curves_ordering="inconclusive-${ephem_data[1]}"
                 local cname="$(get_curve_name ${ephem_data[1]})"
-                if [ "$cname" == "$most_wanted" ]; then
+                if [[ "$cname" == "$most_wanted" ]]; then
                     curves_ordering="client"
                 else
                     curves_ordering="server"
@@ -981,7 +981,7 @@ test_curves_fallback() {
     # client doesn't advertise support for curves the server needs
     fallback_supported="unknown"
 
-    if [ "$ecc_ciphers" == "" ]; then
+    if [[ "$ecc_ciphers" == "" ]]; then
         verbose "No ECC cipher found, can't test curve fallback"
         return
     fi
@@ -989,9 +989,9 @@ test_curves_fallback() {
     # prepare the ssl command we'll be using
     local sslcommand=""
     sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
-    if [ -n "$CAPATH" ]; then
+    if [[ -n "$CAPATH" ]]; then
         sslcommand+=" -CApath $CAPATH -showcerts"
-    elif [ -e "$CACERTS" ]; then
+    elif [[ -e "$CACERTS" ]]; then
         sslcommand+=" -CAfile $CACERTS"
     fi
     sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $ecc_ciphers"
@@ -1030,7 +1030,7 @@ test_curves_fallback() {
                 local cname="$(get_curve_name ${ephem_data[1]})"
                 verbose "Server selected curve $cname"
                 for id in "${!curves[@]}"; do
-                    if [ "${curves[id]}" == "$cname" ]; then
+                    if [[ "${curves[id]}" == "$cname" ]]; then
                         unset curves[$id]
                         break
                     fi
@@ -1083,9 +1083,9 @@ test_tls_tolerance() {
         # cipher string and no options are specified)
         #
         local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
-        if [ -n "$CAPATH" ]; then
+        if [[ -n "$CAPATH" ]]; then
             sslcommand+=" -CApath $CAPATH -showcerts"
-        elif [ -e "$CACERTS" ]; then
+        elif [[ -e "$CACERTS" ]]; then
             sslcommand+=" -CAfile $CACERTS"
         fi
         sslcommand+=" -connect $TARGET -cipher $CIPHERSUITE"
@@ -1111,9 +1111,9 @@ test_tls_tolerance() {
         IFS="$OLDIFS"
 
         local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
-        if [ -n "$CAPATH" ]; then
+        if [[ -n "$CAPATH" ]]; then
             sslcommand+=" -CApath $CAPATH -showcerts"
-        elif [ -e "$CACERTS" ]; then
+        elif [[ -e "$CACERTS" ]]; then
             sslcommand+=" -CAfile $CACERTS"
         fi
         sslcommand+=" -connect $TARGET -cipher $ciphers"
@@ -1185,9 +1185,9 @@ test_tls_tolerance() {
         IFS="$OLDIFS"
 
         local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
-        if [ -n "$CAPATH" ]; then
+        if [[ -n "$CAPATH" ]]; then
             sslcommand+=" -CApath $CAPATH -showcerts"
-        elif [ -e "$CACERTS" ]; then
+        elif [[ -e "$CACERTS" ]]; then
             sslcommand+=" -CAfile $CACERTS"
         fi
         sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $ciphers:!SSLv2"
@@ -1269,7 +1269,7 @@ test_tls_tolerance() {
 }
 
 # If no options are given, give usage information and exit (with error code)
-if [ $# -eq 0 ]; then
+if [[ $# -eq 0 ]]; then
    usage;
    exit 1
 fi
@@ -1353,7 +1353,7 @@ HOST=$(sed -e 's/:.*//'<<<"${TEMPTARGET}")
 PORT=$(sed -e 's/.*://'<<<"${TEMPTARGET}")
 
 # Default to https if no port given
-if [ "$HOST" = "$PORT" ]; then
+if [[ "$HOST" = "$PORT" ]]; then
     PORT=443
 fi
 
@@ -1364,22 +1364,22 @@ TARGET=$HOST:$PORT
 debug "target: $TARGET"
 
 # test our openssl is usable
-if [ ! -x $OPENSSLBIN ]; then
+if [[ ! -x $OPENSSLBIN ]]; then
     OPENSSLBIN=$(which openssl)
-    if [ "$OUTPUTFORMAT" == "terminal" ]; then
+    if [[ "$OUTPUTFORMAT" == "terminal" ]]; then
         echo "custom openssl not executable, falling back to system one from $OPENSSLBIN"
     fi
 fi
 
-if [ $TEST_CURVES == "True" ]; then
-    if [ ! -z "$($OPENSSLBIN s_client -curves 2>&1|head -1|grep 'unknown option')" ]; then
+if [[ $TEST_CURVES == "True" ]]; then
+    if [[ ! -z "$($OPENSSLBIN s_client -curves 2>&1|head -1|grep 'unknown option')" ]]; then
         echo "curves testing not available with your version of openssl, disabling it"
         TEST_CURVES="False"
     fi
 fi
 
-if [ $VERBOSE != 0 ] ; then
-    [ -n "$CACERTS" ] && echo "Using trust anchors from $CACERTS"
+if [[ $VERBOSE != 0 ]] ; then
+    [[ -n "$CACERTS" ]] && echo "Using trust anchors from $CACERTS"
     echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
          $OPENSSLBIN ciphers ALL 2>/dev/null
 fi
@@ -1419,7 +1419,7 @@ if [[ $TEST_CURVES == "True" ]]; then
     test_curves_fallback
 fi
 
-if [ "$OUTPUTFORMAT" == "json" ]; then
+if [[ "$OUTPUTFORMAT" == "json" ]]; then
     display_results_in_json
 else
     echo
@@ -1427,13 +1427,13 @@ else
 fi
 
 # If asked, test every single cipher individually
-if [ $ALLCIPHERS -gt 0 ]; then
+if [[ $ALLCIPHERS -gt 0 ]]; then
     echo; echo "All accepted ciphersuites"
     for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
         r="fail"
         osslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
         test_cipher_on_target "$osslcommand"
-        if [ $? -eq 0 ]; then
+        if [[ $? -eq 0 ]]; then
             r="pass"
         fi
         echo "$c $r"|awk '{printf "%-35s %s\n",$1,$2}'
