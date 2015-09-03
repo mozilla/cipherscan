@@ -10,9 +10,9 @@
 
 DOBENCHMARK=0
 BENCHMARKITER=30
-REALPATH=$(dirname $0)
+REALPATH=$(dirname "$0")
 # make sure this doesn't error out when readlink -f isn't available (OSX)
-readlink -f $0 &>/dev/null && REALPATH=$(dirname $(readlink -f $0))
+readlink -f "$0" &>/dev/null && REALPATH=$(dirname "$(readlink -f "$0")")
 OPENSSLBIN="${REALPATH}/openssl"
 if [[ "$(uname -s)" == "Darwin" ]]; then
     OPENSSLBIN="${REALPATH}/openssl-darwin64"
@@ -43,8 +43,8 @@ if [[ "$TIMEOUTOUTPUT" =~ BusyBox ]]; then
 fi
 
 # use custom config file to enable GOST ciphers
-if [[ -e $(dirname $0)/openssl.cnf ]]; then
-    export OPENSSL_CONF="$(dirname $0)/openssl.cnf"
+if [[ -e $(dirname "$0")/openssl.cnf ]]; then
+    export OPENSSL_CONF="$(dirname "$0")/openssl.cnf"
 fi
 
 # find a list of trusted CAs on the local system, or use the provided list
@@ -57,7 +57,7 @@ if [[ -z "$CACERTS" ]]; then
     done
 fi
 if [[ ! -e "$CACERTS" ]]; then
-    CACERTS="$(dirname $0)/ca-bundle.crt"
+    CACERTS="$(dirname "$0")/ca-bundle.crt"
 fi
 
 # RSA ciphers are put at the end to force Google servers to accept ECDSA ciphers
