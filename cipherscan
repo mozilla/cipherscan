@@ -173,6 +173,19 @@ FALLBACKCIPHERSUITE=(
     'EXP-RC2-CBC-MD5'
     'EXP-RC4-MD5'
 )
+
+join_array_by_char() {
+    # Two or less parameters (join + 0 or 1 value), then no need to set IFS because no join occurs.
+    if (( $# >= 3 )); then
+        # Three or more parameters (join + 2 values), then we need to set IFS for the join.
+        local IFS=$1
+    fi
+    # Discard the join string (usually ':', could be others).
+    shift
+    # Store the joined string in the result.
+    joined_array="$*"
+}
+
 DEBUG=0
 VERBOSE=0
 DELAY=0
@@ -436,10 +449,8 @@ parse_openssl_output() {
                 local match=($data)
                 unset match[0]
                 unset match[1]
-                local old_IFS="$IFS"
-                IFS="_"
-                current_sigalg="${match[*]}"
-                IFS="$old_IFS"
+                join_array_by_char '_' "${match[@]}"
+                current_sigalg="$joined_array"
             fi
         done <<<"$ossl_out"
     fi
@@ -896,10 +907,8 @@ test_curves() {
 
     local curves=(${CURVES[*]})
 
-    OLDIFS="$IFS"
-    IFS=':'
-    verbose "Will test following curves: ${curves[*]}"
-    IFS="$OLDIFS"
+    join_array_by_char ':' "${curves[@]}"
+    verbose "Will test following curves: $joined_array"
 
     # prepare the ssl command we'll be using
     local sslcommand=""
@@ -921,10 +930,8 @@ test_curves() {
     # tries to negotiate a curve we didn't advertise
     #
     while [[ ${#curves[@]} -gt 0 ]]; do
-        OLDIFS="$IFS"
-        IFS=':'
-        local test_curves="${curves[*]}"
-        IFS="$OLDIFS"
+        join_array_by_char ':' "${curves[@]}"
+        local test_curves="$joined_array"
         verbose "Testing $test_curves with command $sslcommand"
 
         ratelimit
@@ -1043,10 +1050,8 @@ test_curves_fallback() {
     #
     local curves=(${CURVES[*]})
     while [[ ${#curves[@]} -gt 0 ]]; do
-        OLDIFS="$IFS"
-        IFS=':'
-        local test_curves="${curves[*]}"
-        IFS="$OLDIFS"
+        join_array_by_char ':' "${curves[@]}"
+        local test_curves="$joined_array"
         verbose "Testing $sslcommand -curves $test_curves"
 
         ratelimit
@@ -1141,10 +1146,8 @@ test_tls_tolerance() {
         #
         # try a smaller, but still v2 compatible Client Hello
         #
-        OLDIFS="$IFS"
-        IFS=":"
-        local ciphers="${SHORTCIPHERSUITE[*]}"
-        IFS="$OLDIFS"
+        join_array_by_char ':' "${SHORTCIPHERSUITE[@]}"
+        local ciphers="$joined_array"
 
         local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
         if [[ -n "$CAPATH" ]]; then
@@ -1215,10 +1218,8 @@ test_tls_tolerance() {
         #
         # use v3 format TLSv1.2 hello, small cipher list
         #
-        OLDIFS="$IFS"
-        IFS=":"
-        local ciphers="${SHORTCIPHERSUITE[*]}"
-        IFS="$OLDIFS"
+        join_array_by_char ':' "${SHORTCIPHERSUITE[@]}"
+        local ciphers="$joined_array"
 
         local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
         if [[ -n "$CAPATH" ]]; then
@@ -1480,11 +1481,8 @@ if [[ ${#cipherspref[@]} -eq 0 ]] || [[ ${pref[1]} == "SSLv2" ]]; then
     cipherspref=()
     ciphercertificates=()
     results=()
-    OLDIFS="$IFS"
-    IFS=":"
-    CIPHERS="${FALLBACKCIPHERSUITE[*]}"
-    IFS="$OLDIFS"
-    get_cipher_pref "$CIPHERS"
+    join_array_by_char ':' "${FALLBACKCIPHERSUITE[@]}"
+    get_cipher_pref "$joined_array"
 fi
 
 test_tls_tolerance
