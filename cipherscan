@@ -503,7 +503,7 @@ test_cipher_on_target() {
             local cksum=($(cksum <<<"$cert"))
             # compare the values not just checksums so that eventual collision
             # doesn't mess up results
-            if [[ ${known_certs[$cksum]} == $cert ]]; then
+            if [[ ${known_certs[$cksum]} == "$cert" ]]; then
                 if [[ -n "${current_certificates}" ]]; then
                     current_certificates+=","
                 fi
@@ -886,7 +886,7 @@ test_serverside_ordering() {
         serverside="True"
     else
         local selected=($result)
-        if [[ $selected == $prefered ]]; then
+        if [[ $selected == "$prefered" ]]; then
             serverside="False"
         else
             serverside="True"
@@ -949,7 +949,7 @@ test_curves() {
                 current_curves+="$cname"
             fi
             for id in "${!curves[@]}"; do
-                if [[ "$cname" == ${curves[$id]} ]]; then
+                if [[ $cname == "${curves[$id]}" ]]; then
                     # we know it's supported, remove it from set of offered ones
                     unset curves[$id]
                     break
