@@ -10,6 +10,14 @@
 
 DOBENCHMARK=0
 BENCHMARKITER=30
+
+# cipherscan requires bash4, which doesn't come by default in OSX
+if [[ ${BASH_VERSINFO[0]} -lt 4 ]]; then
+    echo "Bash version 4 is required to run cipherscan."
+    echo "Please upgrade your version of bash (ex: brew install bash)."
+    exit 1
+fi
+
 DIRNAMEPATH=$(dirname "$0")
 REALPATH="$DIRNAMEPATH"
 # make sure this doesn't error out when readlink -f isn't available (OSX)
@@ -22,13 +30,6 @@ fi
 OPENSSLBINHELP="$($OPENSSLBIN s_client -help 2>&1)"
 if ! [[ $OPENSSLBINHELP =~ -connect ]]; then
     echo "$OPENSSLBIN s_client doesn't accept the -connect parameter, which is extremely strange; refusing to proceed." 1>&2
-    exit 1
-fi
-
-# cipherscan requires bash4, which doesn't come by default in OSX
-if [[ ${BASH_VERSINFO[0]} -lt 4 ]]; then
-    echo "Bash version 4 is required to run cipherscan."
-    echo "Please upgrade your version of bash (ex: brew install bash)."
     exit 1
 fi
 
