@@ -850,7 +850,7 @@ test_serverside_ordering() {
         serverside="True"
         return 0
     # server supports just two ciphers, so rotate them, that should be enough
-    elif [[ ${#cipherspref[@]} -eq 2 ]]; then
+    elif (( ${#cipherspref[@]} == 2 )); then
 
         local cipher=(${cipherspref[1]})
         prefered="$cipher"
@@ -1303,7 +1303,7 @@ test_tls_tolerance() {
 }
 
 # If no options are given, give usage information and exit (with error code)
-if [[ $# -eq 0 ]]; then
+if (( $# == 0 )); then
    usage
    exit 1
 fi
@@ -1474,7 +1474,7 @@ get_cipher_pref $CIPHERSUITE
 # do that either when the normal scan returns no ciphers or just SSLv2
 # ciphers (where it's likely that the limiting by OpenSSL worked)
 pref=(${cipherspref[0]})
-if [[ ${#cipherspref[@]} -eq 0 ]] || [[ ${pref[1]} == "SSLv2" ]]; then
+if (( ${#cipherspref[@]} == 0 )) || [[ ${pref[1]} == "SSLv2" ]]; then
     cipherspref=()
     ciphercertificates=()
     results=()
