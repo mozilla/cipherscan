@@ -1512,6 +1512,6 @@ if [[ -n $ALLCIPHERS ]]; then
         else
             r="fail"
         fi
-        echo "$c $r"|awk '{printf "%-35s %s\n",$1,$2}'
+        printf "%-35s %s\n" "$c" "$r"
     done
 fi
