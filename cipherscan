@@ -324,8 +324,7 @@ get_curve_name() {
     for c in "${CURVES_MAP[@]}"; do
         if [[ "$c" =~ $identifier ]]; then
             verbose "$c matches identifier $identifier"
-            local map=(${c// / })
-            echo ${map[0]}
+            echo "${c%% *}"
             return
         fi
     done
