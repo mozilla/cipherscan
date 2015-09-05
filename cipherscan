@@ -883,7 +883,7 @@ test_serverside_ordering() {
     sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
 
     test_cipher_on_target "$sslcommand"
-    if [[ $? -ne 0 ]]; then
+    if (( $? != 0 )); then
         serverside="True"
     else
         local selected=($result)
