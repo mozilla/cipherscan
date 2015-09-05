@@ -104,6 +104,18 @@ if [[ -e $DIRNAMEPATH/openssl.cnf ]]; then
     export OPENSSL_CONF="$DIRNAMEPATH/openssl.cnf"
 fi
 
+join_array_by_char() {
+    # Two or less parameters (join + 0 or 1 value), then no need to set IFS because no join occurs.
+    if (( $# >= 3 )); then
+        # Three or more parameters (join + 2 values), then we need to set IFS for the join.
+        local IFS=$1
+    fi
+    # Discard the join string (usually ':', could be others).
+    shift
+    # Store the joined string in the result.
+    joined_array="$*"
+}
+
 # RSA ciphers are put at the end to force Google servers to accept ECDSA ciphers
 # (probably a result of a workaround for the bug in Apple implementation of ECDSA)
 CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
@@ -135,6 +147,9 @@ SHORTCIPHERSUITE=(
     'RC4-SHA'
     'RC4-MD5'
 )
+join_array_by_char ':' "${SHORTCIPHERSUITE[@]}"
+SHORTCIPHERSUITESTRING="$joined_array"
+
 # as some servers are intolerant to large client hello's (or ones that have
 # RC4 ciphers below position 64), use the following for cipher testing in case
 # of problems
@@ -173,18 +188,8 @@ FALLBACKCIPHERSUITE=(
     'EXP-RC2-CBC-MD5'
     'EXP-RC4-MD5'
 )
-
-join_array_by_char() {
-    # Two or less parameters (join + 0 or 1 value), then no need to set IFS because no join occurs.
-    if (( $# >= 3 )); then
-        # Three or more parameters (join + 2 values), then we need to set IFS for the join.
-        local IFS=$1
-    fi
-    # Discard the join string (usually ':', could be others).
-    shift
-    # Store the joined string in the result.
-    joined_array="$*"
-}
+join_array_by_char ':' "${FALLBACKCIPHERSUITE[@]}"
+FALLBACKCIPHERSUITESTRING="$joined_array"
 
 DEBUG=0
 VERBOSE=0
@@ -353,6 +358,9 @@ check_option_support() {
     [[ $OPENSSLBINHELP =~ "$1" ]]
 }
 
+# We stop processing certificates on each connection once any of them produces a set of valid certificates.
+current_sigalg="None"
+
 parse_openssl_output() {
     # clear variables in case matching doesn't hit them
     current_ocspstaple="False"
@@ -362,7 +370,6 @@ parse_openssl_output() {
     current_tickethint="None"
     current_pubkey=0
     current_trusted="False"
-    current_sigalg="None"
 
     certs_found=0
     current_raw_certificates=()
@@ -427,7 +434,7 @@ parse_openssl_output() {
         fi
 
         # extract certificates
-        if [[ $line =~ -----BEGIN\ CERTIFICATE----- ]]; then
+        if [[ $current_sigalg == 'None' && $line =~ -----BEGIN\ CERTIFICATE----- ]]; then
             current_raw_certificates[$certs_found]="$line"$'\n'
             while read data; do
                 current_raw_certificates[$certs_found]+="$data"$'\n'
@@ -1136,8 +1143,7 @@ test_tls_tolerance() {
         #
         # try a smaller, but still v2 compatible Client Hello
         #
-        join_array_by_char ':' "${SHORTCIPHERSUITE[@]}"
-        local ciphers="$joined_array"
+        local ciphers="$SHORTCIPHERSUITESTRING"
 
         local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
         if [[ -n "$CAPATH" ]]; then
@@ -1208,8 +1214,7 @@ test_tls_tolerance() {
         #
         # use v3 format TLSv1.2 hello, small cipher list
         #
-        join_array_by_char ':' "${SHORTCIPHERSUITE[@]}"
-        local ciphers="$joined_array"
+        local ciphers="$SHORTCIPHERSUITESTRING"
 
         local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
         if [[ -n "$CAPATH" ]]; then
@@ -1471,8 +1476,7 @@ if (( ${#cipherspref[@]} == 0 )) || [[ ${pref[1]} == "SSLv2" ]]; then
     cipherspref=()
     ciphercertificates=()
     results=()
-    join_array_by_char ':' "${FALLBACKCIPHERSUITE[@]}"
-    get_cipher_pref "$joined_array"
+    get_cipher_pref "$FALLBACKCIPHERSUITESTRING"
 fi
 
 test_tls_tolerance
