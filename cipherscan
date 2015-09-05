@@ -13,8 +13,8 @@ BENCHMARKITER=30
 
 # cipherscan requires bash4, which doesn't come by default in OSX
 if [[ ${BASH_VERSINFO[0]} -lt 4 ]]; then
-    echo "Bash version 4 is required to run cipherscan."
-    echo "Please upgrade your version of bash (ex: brew install bash)."
+    echo "Bash version 4 is required to run cipherscan." 1>&2
+    echo "Please upgrade your version of bash (ex: brew install bash)." 1>&2
     exit 1
 fi
 
