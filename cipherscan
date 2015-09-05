@@ -843,36 +843,29 @@ display_results_in_json() {
 }
 
 test_serverside_ordering() {
+    local -a ciphersuites=()
     local ciphersuite=""
     local prefered=""
     # server supports only one cipher or no ciphers, so it effectively uses server side ordering...
     if (( ${#cipherspref[@]} < 2 )); then
         serverside="True"
         return 0
-    # server supports just two ciphers, so rotate them, that should be enough
-    elif (( ${#cipherspref[@]} == 2 )); then
-
-        local cipher=(${cipherspref[1]})
-        prefered="$cipher"
-        ciphersuite=$cipher
-
-        cipher=(${cipherspref[0]})
-        ciphersuite+=":$cipher"
-
-    # server supports 3 or more ciphers, rotate all three. This is necessary because google does
-    # select first client provided cipher, if it is either CDHE-RSA-AES128-GCM-SHA256 or
-    # ECDHE-RSA-CHACHA20-POLY1305
-    else
-        local cipher=(${cipherspref[2]})
-        prefered="$cipher"
-        ciphersuite="$cipher"
-
-        cipher=(${cipherspref[1]})
-        ciphersuite+=":$cipher"
-
-        cipher=(${cipherspref[0]})
-        ciphersuite+=":$cipher"
     fi
+    local cipher=""
+    if (( ${#cipherspref[@]} > 2 )); then
+        # server supports 3 or more ciphers, rotate all three. This is necessary because google does
+        # select first client provided cipher, if it is either CDHE-RSA-AES128-GCM-SHA256 or
+        # ECDHE-RSA-CHACHA20-POLY1305
+        ciphersuites+=("${cipherspref[2]%% *}")
+    fi
+    # else, server supports just two ciphers, so rotate them, that should be enough
+    ciphersuites+=("${cipherspref[1]%% *}")
+    ciphersuites+=("${cipherspref[0]%% *}")
+
+    prefered="${ciphersuites[0]%% *}"
+
+    join_array_by_char ':' "${ciphersuites[@]}"
+    ciphersuite="$joined_array"
 
     local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
     if [[ -n "$CAPATH" ]]; then
