@@ -1355,27 +1355,21 @@ if (( $# < 1 )); then
     exit 1
 fi
 
-TEMPTARGET=$(sed -e 's/^.* //'<<<"${@}")
-HOST=$(sed -e 's/:.*//'<<<"${TEMPTARGET}")
-PORT=$(sed -e 's/.*://'<<<"${TEMPTARGET}")
-
-# Default to https if no port given
-if [[ "$HOST" = "$PORT" ]]; then
-    PORT=443
-fi
+PARAMS=("$@")
+TARGET=${PARAMS[-1]}
+unset PARAMS[-1]
 
 # Refuse to proceed if the hostname starts with a hyphen, since hostnames can't
 # begin with a hyphen and this likely means we accidentally parsed an option as
 # a hostname.
-if [[ $HOST =~ ^- ]]; then
-    echo "The final argument '$TEMPTARGET' begins with a hyphen '-', which is not a valid HOST[:PORT]." 1>&2
+if [[ -z $TARGET || $TARGET =~ ^[-:] || $TARGET =~ :.*[^0-9] ]]; then
+    echo "The final argument '$TARGET' is not a valid HOST[:PORT]." 1>&2
     exit 1
 fi
+if ! [[ $TARGET =~ : ]]; then
+    TARGET="${TARGET}:443"
+fi
 
-debug "host: $HOST"
-debug "Port: $PORT"
-
-TARGET=$HOST:$PORT
 debug "target: $TARGET"
 
 # test our openssl is usable
@@ -1399,7 +1393,7 @@ if [[ $VERBOSE != 0 ]] ; then
          $OPENSSLBIN ciphers ALL 2>/dev/null
 fi
 
-SCLIENTARGS=$(sed -e s,${TEMPTARGET},,<<<"${@}")
+SCLIENTARGS="${PARAMS[*]}"
 debug "sclientargs: $SCLIENTARGS"
 
 
