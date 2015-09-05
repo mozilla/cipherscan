@@ -846,7 +846,7 @@ test_serverside_ordering() {
     local ciphersuite=""
     local prefered=""
     # server supports only one cipher or no ciphers, so it effectively uses server side ordering...
-    if [[ ${#cipherspref[@]} -lt 2 ]]; then
+    if (( ${#cipherspref[@]} < 2 )); then
         serverside="True"
         return 0
     # server supports just two ciphers, so rotate them, that should be enough
@@ -974,7 +974,7 @@ test_curves() {
 
     # server supports just one or none, so it effectively uses server side
     # ordering (as it dictates what curves client must support)
-    if [[ ${#tmp_curves[@]} -lt 2 ]]; then
+    if (( ${#tmp_curves[@]} < 2 )); then
         curves_ordering="server"
     else
         # server supports at least 2 curves, rotate their order, see if
