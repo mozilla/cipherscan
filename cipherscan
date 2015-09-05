@@ -442,7 +442,7 @@ parse_openssl_output() {
 
     # if we found any certs in output, process the first one and extract
     # the signature algorithm on it (it's the server's certificate)
-    if [[ $certs_found -gt 0 ]]; then
+    if (( certs_found > 0 )); then
         local ossl_out=$(${OPENSSLBIN} x509 -noout -text 2>/dev/null <<<"${current_raw_certificates[0]}")
         local regex='Signature Algorithm[^ ]+ +(.+$)'
         while read data; do
@@ -795,7 +795,7 @@ display_results_in_json() {
     echo -n "{\"target\":\"$TARGET\",\"utctimestamp\":\"$(date -u '+%FT%T.0Z')\",\"serverside\":\"${serverside}\",\"ciphersuite\": ["
     for cipher in "${cipherspref[@]}"; do
         local cipher_arr=($cipher)
-        [[ $ctr -gt 0 ]] && echo -n ','
+        (( ctr > 0 )) && echo -n ','
         echo -n "{\"cipher\":\"${cipher_arr[0]}\","
         echo -n "\"protocols\":[\"${cipher_arr[1]//,/\",\"}\"],"
         echo -n "\"pubkey\":[\"${cipher_arr[2]//,/\",\"}\"],"
@@ -828,7 +828,7 @@ display_results_in_json() {
     ctr=0
     for test_name in "${!tls_tolerance[@]}"; do
         local result=(${tls_tolerance[$test_name]})
-        [[ $ctr -gt 0 ]] && echo -n ","
+        (( ctr > 0 )) && echo -n ","
         echo -n "\"$test_name\":{"
         if [[ ${result[0]} == "False" ]]; then
             echo -n "\"tolerant\":\"False\""
@@ -926,7 +926,7 @@ test_curves() {
     # either get a fallback to a non ECC cipher, we run of curves or server
     # tries to negotiate a curve we didn't advertise
     #
-    while [[ ${#curves[@]} -gt 0 ]]; do
+    while (( ${#curves[@]} > 0 )); do
         join_array_by_char ':' "${curves[@]}"
         local test_curves="$joined_array"
         verbose "Testing $test_curves with command $sslcommand"
@@ -1046,7 +1046,7 @@ test_curves_fallback() {
     # tries to negotiate a curve we didn't advertise
     #
     local curves=(${CURVES[*]})
-    while [[ ${#curves[@]} -gt 0 ]]; do
+    while (( ${#curves[@]} > 0 )); do
         join_array_by_char ':' "${curves[@]}"
         local test_curves="$joined_array"
         verbose "Testing $sslcommand -curves $test_curves"
