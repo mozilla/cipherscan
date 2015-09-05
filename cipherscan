@@ -885,8 +885,7 @@ test_serverside_ordering() {
     if (( $? != 0 )); then
         serverside="True"
     else
-        local selected=($result)
-        if [[ $selected == "$prefered" ]]; then
+        if [[ ${result%% *} == "$prefered" ]]; then
             serverside="False"
         else
             serverside="True"
