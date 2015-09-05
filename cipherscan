@@ -1350,6 +1350,11 @@ done
 
 # echo parameters left: $@
 
+if (( $# < 1 )); then
+    echo "The final argument must be a valid HOST[:PORT], but none was provided." 1>&2
+    exit 1
+fi
+
 TEMPTARGET=$(sed -e 's/^.* //'<<<"${@}")
 HOST=$(sed -e 's/:.*//'<<<"${TEMPTARGET}")
 PORT=$(sed -e 's/.*://'<<<"${TEMPTARGET}")
