@@ -633,7 +633,7 @@ bench_cipher() {
     for i in $(seq 1 $BENCHMARKITER); do
         debug Connection $i
         (echo "Q" | $sslcommand 2>/dev/null 1>/dev/null)
-        if [[ $? -gt 0 ]]; then
+        if (( $? != 0 )); then
             break
         fi
     done
