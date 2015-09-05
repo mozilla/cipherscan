@@ -1340,6 +1340,11 @@ do
     esac
 done
 
+if [[ -n $CAPATH && -n $CACERTS ]]; then
+    echo "Both directory and file with CA certificates specified" 1>&2
+    exit 1
+fi
+
 # echo parameters left: $@
 
 TEMPTARGET=$(sed -e 's/^.* //'<<<"${@}")
