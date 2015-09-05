@@ -444,13 +444,10 @@ parse_openssl_output() {
     # the signature algorithm on it (it's the server's certificate)
     if [[ $certs_found -gt 0 ]]; then
         local ossl_out=$(${OPENSSLBIN} x509 -noout -text 2>/dev/null <<<"${current_raw_certificates[0]}")
+        local regex='Signature Algorithm[^ ]+ +(.+$)'
         while read data; do
-            if [[ $data =~ Signature\ Algorithm ]]; then
-                local match=($data)
-                unset match[0]
-                unset match[1]
-                join_array_by_char '_' "${match[@]}"
-                current_sigalg="$joined_array"
+            if [[ $data =~ $regex ]]; then
+                current_sigalg="${BASH_REMATCH[1]// /_}"
             fi
         done <<<"$ossl_out"
     fi
