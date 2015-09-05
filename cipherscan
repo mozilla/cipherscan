@@ -461,7 +461,7 @@ parse_openssl_output() {
 
 # Connect to a target host with the selected ciphersuite
 test_cipher_on_target() {
-    local sslcommand=$@
+    local sslcommand="$*"
     cipher=""
     local cmnd=""
     protocols=""
