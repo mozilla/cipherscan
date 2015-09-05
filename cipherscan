@@ -328,7 +328,7 @@ get_curve_name() {
             return
         fi
     done
-    echo $identifier
+    echo "$identifier"
     return
 }
 
@@ -621,7 +621,7 @@ test_cipher_on_target() {
                 ecc_ciphers+="$cipher"
             else
                 # resolve the openssl curve to the proper IANA name
-                current_curves="$(get_curve_name $(echo $pfs|cut -d ',' -f2))"
+                current_curves="$(get_curve_name "$(echo $pfs|cut -d ',' -f2)")"
             fi
         fi
         result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
@@ -637,7 +637,7 @@ bench_cipher() {
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
-        debug Connection $i
+        debug "Connection $i"
         (echo "Q" | $sslcommand 2>/dev/null 1>/dev/null)
         if (( $? != 0 )); then
             break
@@ -749,11 +749,11 @@ display_results_in_terminal() {
     ctr=0
     for result in "${results[@]}"; do
         if [[ $ctr -eq 0 ]]; then
-            echo $header
+            echo "$header"
             ctr=$((ctr+1))
         fi
         if [[ $different == "True" ]]; then
-            echo $result|grep -v '(NONE)'
+            echo "$result"|grep -v '(NONE)'
         else
             # prints priority, ciphersuite, protocols and pfs
             awk '!/(NONE)/{print $1 " " $2 " " $3 " " $9 " " $10}' <<<"$result"
@@ -931,7 +931,7 @@ test_curves() {
         verbose "Testing $test_curves with command $sslcommand"
 
         ratelimit
-        local tmp=$(echo Q | $sslcommand -curves $test_curves 2>/dev/null)
+        local tmp=$(echo Q | $sslcommand -curves "$test_curves" 2>/dev/null)
         parse_openssl_output <<<"$tmp"
 
         if [[ -z $current_protocol || $current_cipher == "(NONE)" || $current_cipher == '0000' ]]; then
@@ -944,7 +944,7 @@ test_curves() {
                 if [[ -n $current_curves ]]; then
                     current_curves+=","
                 fi
-                cname="$(get_curve_name ${ephem_data[1]})"
+                cname="$(get_curve_name "${ephem_data[1]}")"
                 verbose "Server selected ${ephem_data[1]}, a.k.a $cname"
                 current_curves+="$cname"
             fi
@@ -987,7 +987,7 @@ test_curves() {
 
         verbose "Testing ordering with $sslcommand -curves $test_curves"
         ratelimit
-        local tmp=$(echo Q | $sslcommand -curves $test_curves 2>/dev/null)
+        local tmp=$(echo Q | $sslcommand -curves "$test_curves" 2>/dev/null)
         parse_openssl_output <<<"$tmp"
 
         if [[ -z $current_protocol || $current_cipher == "(NONE)" || $current_cipher == '0000' ]]; then
@@ -1001,7 +1001,7 @@ test_curves() {
             if [[ ${ephem_data[0]} =~ ECDH ]]; then
                 verbose "Server did select ${ephem_data[1]} curve"
                 curves_ordering="inconclusive-${ephem_data[1]}"
-                local cname="$(get_curve_name ${ephem_data[1]})"
+                local cname="$(get_curve_name "${ephem_data[1]}")"
                 if [[ "$cname" == "$most_wanted" ]]; then
                     curves_ordering="client"
                 else
@@ -1051,7 +1051,7 @@ test_curves_fallback() {
         verbose "Testing $sslcommand -curves $test_curves"
 
         ratelimit
-        local tmp=$(echo Q | $sslcommand -curves $test_curves 2>/dev/null)
+        local tmp=$(echo Q | $sslcommand -curves "$test_curves" 2>/dev/null)
         parse_openssl_output <<<"$tmp"
 
         if [[ -z $current_protocol || $current_cipher == "(NONE)" || $current_cipher == '0000' ]]; then
@@ -1064,7 +1064,7 @@ test_curves_fallback() {
 
             if [[ ${ephem_data[0]} =~ ECDH ]]; then
                 # we got an ecc connection, remove the curve from the list of testable curves
-                local cname="$(get_curve_name ${ephem_data[1]})"
+                local cname="$(get_curve_name "${ephem_data[1]}")"
                 verbose "Server selected curve $cname"
                 for id in "${!curves[@]}"; do
                     if [[ "${curves[id]}" == "$cname" ]]; then
