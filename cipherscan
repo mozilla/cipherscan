@@ -615,7 +615,7 @@ test_cipher_on_target() {
             has_curves="True"
             if [[ $TEST_CURVES == "True" ]]; then
                 test_curves
-                if [[ "$ecc_ciphers" != "" ]]; then
+                if [[ -n $ecc_ciphers ]]; then
                     ecc_ciphers+=":"
                 fi
                 ecc_ciphers+="$cipher"
@@ -702,7 +702,7 @@ display_results_in_terminal() {
             trusted="${cipher_data[4]}"
             tickethint="${cipher_data[5]}"
             ocspstaple="${cipher_data[6]}"
-            if [[ $TEST_CURVES == "True" && "${cipher_data[9]}" != "" ]]; then
+            if [[ $TEST_CURVES == "True" && -n ${cipher_data[9]} ]]; then
                 curvesordering="${cipher_data[9]}"
             fi
         else
@@ -721,10 +721,10 @@ display_results_in_terminal() {
             if [[ "$ocspstaple" != "${cipher_data[6]}" ]]; then
                 different=True
             fi
-            if [[ "$curvesordering" == "" && "${cipher_data[9]}" != "" ]]; then
+            if [[ "$curvesordering" == "" && -n "${cipher_data[9]}" ]]; then
                 curvesordering="${cipher_data[9]}"
             fi
-            if [[ "$curvesordering" != "" && "$curvesordering" != "${cipher_data[9]}" ]]; then
+            if [[ -n $curvesordering && "$curvesordering" != "${cipher_data[9]}" ]]; then
                 different=True
             fi
         fi
@@ -941,7 +941,7 @@ test_curves() {
             local ephem_data=(${current_pfs//,/ })
             local cname=""
             if [[ ${ephem_data[0]} =~ ECDH ]]; then
-                if [[ "$current_curves" != "" ]]; then
+                if [[ -n $current_curves ]]; then
                     current_curves+=","
                 fi
                 cname="$(get_curve_name ${ephem_data[1]})"
