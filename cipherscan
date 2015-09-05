@@ -1507,7 +1507,7 @@ fi
 # If asked, test every single cipher individually
 if [[ -n $ALLCIPHERS ]]; then
     echo; echo "All accepted ciphersuites"
-    for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort|uniq); do
+    for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort -u); do
         r="fail"
         osslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
         test_cipher_on_target "$osslcommand"
