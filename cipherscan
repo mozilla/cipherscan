@@ -1359,6 +1359,14 @@ if [[ "$HOST" = "$PORT" ]]; then
     PORT=443
 fi
 
+# Refuse to proceed if the hostname starts with a hyphen, since hostnames can't
+# begin with a hyphen and this likely means we accidentally parsed an option as
+# a hostname.
+if [[ $HOST =~ ^- ]]; then
+    echo "The final argument '$TEMPTARGET' begins with a hyphen '-', which is not a valid HOST[:PORT]." 1>&2
+    exit 1
+fi
+
 debug "host: $HOST"
 debug "Port: $PORT"
 
