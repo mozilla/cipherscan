@@ -104,19 +104,6 @@ if [[ -e $DIRNAMEPATH/openssl.cnf ]]; then
     export OPENSSL_CONF="$DIRNAMEPATH/openssl.cnf"
 fi
 
-# find a list of trusted CAs on the local system, or use the provided list
-if [[ -z "$CACERTS" ]]; then
-    for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
-        if [[ -e "$f" ]]; then
-            CACERTS="$f"
-            break
-        fi
-    done
-fi
-if [[ ! -e "$CACERTS" ]]; then
-    CACERTS="$DIRNAMEPATH/ca-bundle.crt"
-fi
-
 # RSA ciphers are put at the end to force Google servers to accept ECDSA ciphers
 # (probably a result of a workaround for the bug in Apple implementation of ECDSA)
 CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
@@ -194,7 +181,6 @@ OUTPUTFORMAT="terminal"
 TIMEOUT=30
 # place where to put the found intermediate CA certificates and where
 # trust anchors are stored
-CAPATH=""
 SAVECRT=""
 TEST_CURVES="True"
 has_curves="False"
@@ -1363,6 +1349,12 @@ do
             DELAY=$2
             shift 2
             ;;
+        --cafile)
+            CACERTS="$2"
+            shift 2
+            # We need to bypass autodetection if this is provided.
+            CACERTS_ARG_SET=1
+            ;;
         --capath)
             CAPATH="$2"
             shift 2
@@ -1398,6 +1390,11 @@ do
     esac
 done
 
+if [[ -n $CAPATH && -n $CACERTS ]]; then
+    echo "Both directory and file with CA certificates specified" 1>&2
+    exit 1
+fi
+
 # echo parameters left: $@
 
 TEMPTARGET=$(sed -e 's/^.* //'<<<"${@}")
@@ -1428,6 +1425,28 @@ if [[ $TEST_CURVES == "True" ]]; then
         echo "curves testing not available with your version of openssl, disabling it"
         TEST_CURVES="False"
     fi
+fi
+
+if [[ -z $CACERTS ]] && ! [[ -n $CACERTS_ARG_SET ]]; then
+    # find a list of trusted CAs on the local system, or use the provided list
+    for f in /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
+        if [[ -e "$f" ]]; then
+            CACERTS="$f"
+            break
+        fi
+    done
+    if [[ ! -e "$CACERTS" ]]; then
+        CACERTS="$DIRNAMEPATH/ca-bundle.crt"
+    fi
+fi
+if ! [[ -e $CACERTS && -r $CACERTS ]]; then
+    echo "--cafile $CACERTS is not a readable file, aborting." 1>&2
+    exit 1
+fi
+
+if [[ -n $CAPATH ]] && ! [[ -d $CAPATH ]]; then
+    echo "--capath $CAPATH is not a directory, aborting." 1>&2
+    exit 1
 fi
 
 if [[ $VERBOSE != 0 ]] ; then
