@@ -515,6 +515,7 @@ test_cipher_on_target() {
     declare -A tickethints=()
     declare -A ocspstaples=()
     declare -A trusteds=()
+    declare -A pubkeys=()
     for tls_version in "${TLS_VERSIONS_TO_TEST[@]}"; do
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
@@ -628,7 +629,7 @@ test_cipher_on_target() {
         cipher=$current_cipher
         [[ -z $current_pfs ]] && current_pfs="None"
         pfses[$current_protocol]="$current_pfs"
-        pubkey=$current_pubkey
+        pubkeys[$current_protocol]="$current_pubkey"
         sigalgs[$current_protocol]="$current_sigalg"
         trusteds[$current_protocol]=$current_trusted
         tickethints[$current_protocol]=$current_tickethint
@@ -732,6 +733,24 @@ test_cipher_on_target() {
     else
         # Just extract the one value that's present and use it.
         trusted="${trusteds[@]}"
+    fi
+
+    # Flatten the pubkeys list to a single item if every entry is the same.
+    if (( ${#pubkeys[*]} > 1 )); then
+        local pubkeys_values=()
+        for each_protocol in "${protocols[@]}"; do
+            pubkeys_values+=("${pubkeys[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ',' "${pubkeys_values[@]}"
+        else
+            flatten_or_join_array_by_char ',' "${pubkeys_values[@]}"
+        fi
+        pubkey="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        pubkey="${pubkeys[@]}"
     fi
 
     # Pre-join this, since we use it in a couple of places below.
