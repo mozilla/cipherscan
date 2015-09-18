@@ -1364,6 +1364,8 @@ do
             ;;
         -j | -json | --json | --JSON)
             OUTPUTFORMAT="json"
+            TEST_CURVES="True"
+            TEST_TOLERANCE="True"
             shift
             ;;
         -b | --benchmark)
