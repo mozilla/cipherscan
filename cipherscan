@@ -363,9 +363,6 @@ check_option_support() {
     [[ $OPENSSLBINHELP =~ "$1" ]]
 }
 
-# We stop processing certificates on each connection once any of them produces a set of valid certificates.
-current_sigalg="None"
-
 parse_openssl_output() {
     # clear variables in case matching doesn't hit them
     current_ocspstaple="False"
@@ -375,6 +372,7 @@ parse_openssl_output() {
     current_tickethint="None"
     current_pubkey=0
     current_trusted="False"
+    current_sigalg="None"
 
     certs_found=0
     current_raw_certificates=()
@@ -439,7 +437,7 @@ parse_openssl_output() {
         fi
 
         # extract certificates
-        if [[ $current_sigalg == 'None' && $line =~ -----BEGIN\ CERTIFICATE----- ]]; then
+        if [[ $line =~ -----BEGIN\ CERTIFICATE----- ]]; then
             current_raw_certificates[$certs_found]="$line"$'\n'
             while read data; do
                 current_raw_certificates[$certs_found]+="$data"$'\n'
