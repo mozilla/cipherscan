@@ -750,27 +750,48 @@ display_results_in_terminal() {
         fi
     done|column -t
     echo
+    pubkey_eval="KO"
+    if (( $pubkey > 2047 )); then
+        pubkey_eval="OK"
+    fi
+    sigalg_eval="OK"
+    if [[ $sigalg =~ md5|sha1 ]]; then
+        sigalg_eval="KO"
+    fi
+    if [[ $trusted == "True" ]]; then
+        trusted="trusted [OK]"
+    else
+        trusted="untrusted [KO]"
+    fi
     if [[ $different != "True" ]]; then
-        if [[ "$trusted" == "True" ]]; then
-            echo "Certificate: trusted, $pubkey bit, $sigalg signature"
-        else
-            echo "Certificate: UNTRUSTED, $pubkey bit, $sigalg signature"
-        fi
+        echo "Certificate: $trusted, $pubkey bit [$pubkey_eval], $sigalg signature [$sigalg_eval]"
         echo "TLS ticket lifetime hint: $tickethint"
     fi
     if [[ $ocspstaple == "True" ]]; then
-        echo "OCSP stapling: supported"
+        echo "OCSP stapling: supported [OK]"
     else
-        echo "OCSP stapling: not supported"
+        echo "OCSP stapling: not supported [KO]"
     fi
     if [[ $serverside == "True" ]]; then
-        echo "Cipher ordering: server"
+        echo "Cipher ordering: server [OK]"
     else
-        echo "Cipher ordering: client"
+        echo "Cipher ordering: client [KO]"
     fi
     if [[ $TEST_CURVES == "True" ]]; then
-        echo "Curves ordering: $curvesordering"
-        echo "Curves fallback: $fallback_supported"
+        if [[ $curvesordering == "server" ]]; then
+            curvesordering="$curvesordering [OK]"
+        else
+            if [[ $curvesordering == "" ]]; then
+                curvesordering="none"
+            fi
+            curvesordering="$curvesordering [KO]"
+        fi
+        if [[ $fallback_supported == "True" ]]; then
+            fallback_supported="$fallback_supported [OK]"
+        else
+            fallback_supported="$fallback_supported [KO]"
+        fi
+        echo "Curves ordering: $curvesordering - fallback: $fallback_supported"
     fi
 
     if [[ $TEST_TOLERANCE == "True" ]]; then
