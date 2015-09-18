@@ -469,7 +469,7 @@ test_cipher_on_target() {
     local sslcommand="$*"
     cipher=""
     local cmnd=""
-    protocols=""
+    protocols=()
     pfs=""
     previous_cipher=""
     certificates=""
@@ -577,16 +577,12 @@ test_cipher_on_target() {
         fi
         # handling of TLSv1.2 only cipher suites
         if [[ ! -z "$previous_cipher" ]] && [[ "$previous_cipher" != "$current_cipher" ]] && [[ "$current_cipher" != "0000" ]]; then
-            unset protocols
+            protocols=()
         fi
         previous_cipher=$current_cipher
 
         # connection succeeded, add TLS version to positive results
-        if [[ -z "$protocols" ]]; then
-            protocols=$current_protocol
-        else
-            protocols="$protocols,$current_protocol"
-        fi
+        protocols+=("$current_protocol")
         cipher=$current_cipher
         pfs=$current_pfs
         [[ -z $pfs ]] && pfs="None"
@@ -606,9 +602,13 @@ test_cipher_on_target() {
         return 2
     fi
 
+    # Pre-join this, since we use it in a couple of places below.
+    join_array_by_char ',' "${protocols[@]}"
+    protocols_csv="$joined_array"
+
     # if cipher contains NONE, the cipher wasn't accepted
     if [[ "$cipher" == '(NONE)  ' ]]; then
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
+        result="$cipher $protocols_csv $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
     fi
@@ -629,7 +629,7 @@ test_cipher_on_target() {
             current_curves="$(get_curve_name "$(echo $pfs|cut -d ',' -f2)")"
         fi
     fi
-    result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
+    result="$cipher $protocols_csv $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
     verbose "handshake succeeded, server returned ciphersuite '$result'"
     return 0
 }
