@@ -456,6 +456,43 @@ parse_openssl_output() {
     fi
 }
 
+flatten_or_join_array_by_char() {
+    # Two or less parameters (join + 0 or 1 value), then no need to join; return the string.
+    if (( $# <= 2 )); then
+        joined_array="$2"
+        return
+    fi
+    # Discard the join string (usually ':', could be others).
+    local join_by="$1"
+    shift
+
+    local found_many=''
+    local last_value=''
+    for each_value in "$@"; do
+        if [[ -z $last_value ]]; then
+            # This is the first one, so store it.
+            last_value="$each_value"
+            continue
+        fi
+        if [[ $last_value != "$each_value" ]]; then
+            # This one is different, so we found many. Stop checking.
+            found_many=1
+            break
+        fi
+    done
+
+    if [[ -z $found_many ]]; then
+        # We only found one, so emit that.
+        joined_array="$1"
+        return
+    else
+        # We found many, so join them by whatever.
+        join_array_by_char "$join_by" "$@"
+        # joined_array is now set. All done.
+        return
+    fi
+}
+
 TLS_VERSIONS_TO_TEST=(
     '-ssl2'
     '-ssl3'
@@ -470,9 +507,11 @@ test_cipher_on_target() {
     cipher=""
     local cmnd=""
     protocols=()
+    versions=()
     pfs=""
     previous_cipher=""
     certificates=""
+    declare -A sigalgs=()
     for tls_version in "${TLS_VERSIONS_TO_TEST[@]}"; do
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
@@ -587,7 +626,7 @@ test_cipher_on_target() {
         pfs=$current_pfs
         [[ -z $pfs ]] && pfs="None"
         pubkey=$current_pubkey
-        sigalg=$current_sigalg
+        sigalgs[$current_protocol]="$current_sigalg"
         trusted=$current_trusted
         tickethint=$current_tickethint
         ocspstaple=$current_ocspstaple
@@ -600,6 +639,24 @@ test_cipher_on_target() {
         verbose "handshake failed, no ciphersuite was returned"
         result='ConnectionFailure'
         return 2
+    fi
+
+    # Flatten the sigalgs list to a single item if every entry is the same.
+    if (( ${#sigalgs[*]} > 1 )); then
+        local sigalgs_values=()
+        for each_protocol in "${protocols[@]}"; do
+            sigalgs_values+=("${sigalgs[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ',' "${sigalgs_values[@]}"
+        else
+            flatten_or_join_array_by_char ',' "${sigalgs_values[@]}"
+        fi
+        sigalg="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        sigalg="${sigalgs[@]}"
     fi
 
     # Pre-join this, since we use it in a couple of places below.
