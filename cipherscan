@@ -179,6 +179,7 @@ DELAY=0
 ALLCIPHERS=0
 OUTPUTFORMAT="terminal"
 TIMEOUT=30
+USECOLORS="True"
 # place where to put the found intermediate CA certificates and where
 # trust anchors are stored
 SAVECRT=""
@@ -229,6 +230,7 @@ Use one of the options below:
 --savecrt           path where to save untrusted and leaf certificates
 --[no-]curves       test ECC curves supported by server (req. OpenSSL 1.0.2)
 --[no-]tolerance    test TLS tolerance
+--no-colors         don't use terminal colors
 -v | --verbose      Increase verbosity.
 
 The rest of the arguments will be interpreted as openssl s_client argument.
@@ -675,6 +677,19 @@ display_results_in_terminal() {
     local ocspstaple
     local curvesordering
     local different=False
+    # Configure colors, if terminal supports them
+    if [[ $USECOLORS == "True" && -x /usr/bin/tput ]] && tput setaf 1 >&/dev/null; then
+        c_blue="\033[0;34m"
+        c_green="\033[0;32m"
+        c_red="\033[0;31m"
+        c_reset="\033[0m"
+    else
+        c_reset=
+        c_blue=
+        c_green=
+        c_red=
+    fi
+
     echo "Target: $TARGET"; echo
     for cipher in "${cipherspref[@]}"; do
         # get first in array
@@ -750,56 +765,58 @@ display_results_in_terminal() {
         fi
     done|column -t
     echo
-    pubkey_eval="KO"
-            pubkey_eval="OK"
-        fi
+    
     if [[ ($sigalg =~ RSA && $pubkey -gt 2047) || ($sigalg =~ DSA && $pubkey -gt 255) ]]; then
+        pubkey="${c_green}${pubkey}${c_reset}"
+    else
+        pubkey="${c_red}${pubkey}${c_reset}"
     fi
-    sigalg_eval="OK"
     if [[ $sigalg =~ md5|sha1 ]]; then
-        sigalg_eval="KO"
+        sigalg="${c_red}${sigalg}${c_reset}"
+    else
+        sigalg="${c_green}${sigalg}${c_reset}"
     fi
     if [[ $trusted == "True" ]]; then
-        trusted="trusted [OK]"
+        trusted="${c_green}trusted${c_reset}"
     else
-        trusted="untrusted [KO]"
+        trusted="${c_green}untrusted${c_reset}"
     fi
     if [[ $different != "True" ]]; then
-        echo "Certificate: $trusted, $pubkey bit [$pubkey_eval], $sigalg signature [$sigalg_eval]"
+        echo -e "Certificate: $trusted, $pubkey bits, $sigalg signature"
         echo "TLS ticket lifetime hint: $tickethint"
     fi
     if [[ $ocspstaple == "True" ]]; then
-        echo "OCSP stapling: supported [OK]"
+        echo -e "OCSP stapling: ${c_green}supported${c_reset}"
     else
-        echo "OCSP stapling: not supported [KO]"
+        echo -e "OCSP stapling: ${c_red}not supported${c_reset}"
     fi
     if [[ $serverside == "True" ]]; then
-        echo "Cipher ordering: server [OK]"
+        echo -e "Cipher ordering: ${c_green}server${c_reset}"
     else
-        echo "Cipher ordering: client [KO]"
+        echo -e "Cipher ordering: ${c_red}client${c_reset}"
     fi
     if [[ $TEST_CURVES == "True" ]]; then
         if [[ $curvesordering == "server" ]]; then
-            curvesordering="$curvesordering [OK]"
+            curvesordering="${c_green}${curvesordering}${c_reset}"
         else
             if [[ $curvesordering == "" ]]; then
-                curvesordering="none"
+                curvesordering="${c_red}none"
             fi
-            curvesordering="$curvesordering [KO]"
+            curvesordering="${c_red}${curvesordering}${c_reset}"
         fi
         if [[ $fallback_supported == "True" ]]; then
-            fallback_supported="$fallback_supported [OK]"
+            fallback_supported="${c_green}yes${c_reset}"
         else
-            fallback_supported="$fallback_supported [KO]"
+            fallback_supported="${c_red}no${c_reset}"
         fi
-        echo "Curves ordering: $curvesordering - fallback: $fallback_supported"
+        echo -e "Curves ordering: $curvesordering - fallback: $fallback_supported"
     fi
 
     if [[ $TEST_TOLERANCE == "True" ]]; then
         if [[ $tls_tolerance['big-TLSv1.2'] =~ TLSv1.2 ]]; then
-            echo "TLS Tolerance: True [OK]"
+            echo -e "TLS Tolerance: ${c_green}yes${c_reset}"
         else
-            echo "TLS Tolerance: False [KO]"
+            echo "TLS Tolerance: ${c_red}no${c_reset}"
             echo "Fallbacks required:"
             for test_name in "${!tls_tolerance[@]}"; do
                 if [[ ${tls_tolerance[$test_name]} == "False" ]]; then
@@ -1413,6 +1430,10 @@ do
             ;;
         --no-tolerance)
             TEST_TOLERANCE="False"
+            shift 1
+            ;;
+        --no-colors)
+            USECOLORS="False"
             shift 1
             ;;
         --) # End of all options
