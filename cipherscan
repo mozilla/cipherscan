@@ -512,6 +512,7 @@ test_cipher_on_target() {
     certificates=""
     declare -A sigalgs=()
     declare -A pfses=()
+    declare -A tickethints=()
     for tls_version in "${TLS_VERSIONS_TO_TEST[@]}"; do
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
@@ -628,7 +629,7 @@ test_cipher_on_target() {
         pubkey=$current_pubkey
         sigalgs[$current_protocol]="$current_sigalg"
         trusted=$current_trusted
-        tickethint=$current_tickethint
+        tickethints[$current_protocol]=$current_tickethint
         ocspstaple=$current_ocspstaple
         certificates="$current_certificates"
         # grab the cipher and PFS key size
@@ -675,6 +676,24 @@ test_cipher_on_target() {
     else
         # Just extract the one value that's present and use it.
         pfs="${pfses[@]}"
+    fi
+
+    # Flatten the tickethints list to a single item if every entry is the same.
+    if (( ${#tickethints[*]} > 1 )); then
+        local tickethints_values=()
+        for each_protocol in "${protocols[@]}"; do
+            tickethints_values+=("${tickethints[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ',' "${tickethints_values[@]}"
+        else
+            flatten_or_join_array_by_char ',' "${tickethints_values[@]}"
+        fi
+        tickethint="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        tickethint="${tickethints[@]}"
     fi
 
     # Pre-join this, since we use it in a couple of places below.
@@ -1009,7 +1028,7 @@ display_results_in_json() {
         if [[ -n $CAPATH ]]; then
             echo -n "\"certificates\":[${ciphercertificates[$ctr]}],"
         fi
-        echo -n "\"ticket_hint\":\"${cipher_arr[5]}\","
+        echo -n "\"ticket_hint\":[\"${cipher_arr[5]//,/\",\"}\"],"
         echo -n "\"ocsp_stapling\":\"${cipher_arr[6]}\","
         echo -n "\"pfs\":[\"${cipher_arr[7]//\;/\",\"}\"]"
         if [[ "${cipher_arr[0]}" =~ ECDH ]]; then
