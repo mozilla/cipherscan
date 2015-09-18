@@ -184,6 +184,7 @@ TIMEOUT=30
 SAVECRT=""
 TEST_CURVES="True"
 has_curves="False"
+TEST_TOLERANCE="True"
 # openssl formated list of curves that will cause server to select ECC suite
 ecc_ciphers=""
 unset known_certs
@@ -227,6 +228,7 @@ Use one of the options below:
 -o | --openssl      path/to/your/openssl binary you want to use.
 --savecrt           path where to save untrusted and leaf certificates
 --[no-]curves       test ECC curves supported by server (req. OpenSSL 1.0.2)
+--[no-]tolerance    test TLS tolerance
 -v | --verbose      Increase verbosity.
 
 The rest of the arguments will be interpreted as openssl s_client argument.
@@ -771,16 +773,22 @@ display_results_in_terminal() {
         echo "Curves fallback: $fallback_supported"
     fi
 
-    echo
-    echo "Fallbacks required:"
-    for test_name in "${!tls_tolerance[@]}"; do
-        if [[ ${tls_tolerance[$test_name]} == "False" ]]; then
-            echo "$test_name config not supported, connection failed"
+    if [[ $TEST_TOLERANCE == "True" ]]; then
+        if [[ $tls_tolerance['big-TLSv1.2'] =~ TLSv1.2 ]]; then
+            echo "TLS Tolerance: True [OK]"
         else
-            local res=(${tls_tolerance[$test_name]})
-            echo "$test_name no fallback req, connected: ${res[1]} ${res[2]}"
+            echo "TLS Tolerance: False [KO]"
+            echo "Fallbacks required:"
+            for test_name in "${!tls_tolerance[@]}"; do
+                if [[ ${tls_tolerance[$test_name]} == "False" ]]; then
+                    echo "$test_name config not supported, connection failed"
+                else
+                    local res=(${tls_tolerance[$test_name]})
+                    echo "$test_name no fallback req, connected: ${res[1]} ${res[2]}"
+                fi
+            done | sort
         fi
-    done | sort
+    fi
 }
 
 display_results_in_json() {
@@ -1375,6 +1383,14 @@ do
             TEST_CURVES="False"
             shift 1
             ;;
+        --tolerance)
+            TEST_TOLERANCE="True"
+            shift 1
+            ;;
+        --no-tolerance)
+            TEST_TOLERANCE="False"
+            shift 1
+            ;;
         --) # End of all options
             shift
             break
@@ -1489,7 +1505,9 @@ if [[ ${#cipherspref[@]} -eq 0 ]] || [[ ${pref[1]} == "SSLv2" ]]; then
     get_cipher_pref "$CIPHERS"
 fi
 
-test_tls_tolerance
+if [[ $TEST_TOLERANCE == "True" ]]; then
+    test_tls_tolerance
+fi
 
 test_serverside_ordering
 
