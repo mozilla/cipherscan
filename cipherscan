@@ -49,9 +49,9 @@ else
             # test that readlink or greadlink (darwin) are present
             READLINKBIN="$(which readlink)"
 
-            if [[ "$READLINKBIN" == "" ]]; then
+            if [[ -z $READLINKBIN ]]; then
                 READLINKBIN="$(which greadlink)"
-                if [[ "$READLINKBIN" == "" ]]; then
+                if [[ -z $READLINKBIN ]]; then
                     echo "neither readlink nor greadlink are present. install coreutils with {apt-get,yum,brew} install coreutils" 1>&2
                     exit 1
                 fi
@@ -60,9 +60,9 @@ else
             # test that timeout or gtimeout (darwin) are present
             TIMEOUTBIN="$(which timeout)"
 
-            if [[ "$TIMEOUTBIN" == "" ]]; then
+            if [[ -z $TIMEOUTBIN ]]; then
                 TIMEOUTBIN="$(which gtimeout)"
-                if [[ "$TIMEOUTBIN" == "" ]]; then
+                if [[ -z $TIMEOUTBIN ]]; then
                     echo "neither timeout nor gtimeout are present. install coreutils with {apt-get,yum,brew} install coreutils" 1>&2
                     exit 1
                 fi
@@ -721,7 +721,7 @@ display_results_in_terminal() {
             if [[ "$ocspstaple" != "${cipher_data[6]}" ]]; then
                 different=True
             fi
-            if [[ "$curvesordering" == "" && -n "${cipher_data[9]}" ]]; then
+            if [[ -z $curvesordering && -n "${cipher_data[9]}" ]]; then
                 curvesordering="${cipher_data[9]}"
             fi
             if [[ -n $curvesordering && "$curvesordering" != "${cipher_data[9]}" ]]; then
@@ -813,7 +813,7 @@ display_results_in_json() {
         echo -n "\"ticket_hint\":\"${cipher_arr[5]}\","
         echo -n "\"ocsp_stapling\":\"${cipher_arr[6]}\","
         pfs="${cipher_arr[7]}"
-        [[ "$pfs" == "" ]] && pfs="None"
+        [[ -z $pfs ]] && pfs="None"
         echo -n "\"pfs\":\"$pfs\""
         if [[ "${cipher_arr[0]}" =~ ECDH ]]; then
             echo -n ","
@@ -1019,7 +1019,7 @@ test_curves_fallback() {
     # client doesn't advertise support for curves the server needs
     fallback_supported="unknown"
 
-    if [[ "$ecc_ciphers" == "" ]]; then
+    if [[ -z $ecc_ciphers ]]; then
         verbose "No ECC cipher found, can't test curve fallback"
         return
     fi
