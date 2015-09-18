@@ -456,6 +456,14 @@ parse_openssl_output() {
     fi
 }
 
+TLS_VERSIONS_TO_TEST=(
+    '-ssl2'
+    '-ssl3'
+    '-tls1'
+    '-tls1_1'
+    '-tls1_2'
+)
+
 # Connect to a target host with the selected ciphersuite
 test_cipher_on_target() {
     local sslcommand="$*"
@@ -465,8 +473,7 @@ test_cipher_on_target() {
     pfs=""
     previous_cipher=""
     certificates=""
-    for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
-    do
+    for tls_version in "${TLS_VERSIONS_TO_TEST[@]}"; do
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
         # -status exception is ignored in SSLv2, go figure
