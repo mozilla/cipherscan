@@ -513,6 +513,8 @@ test_cipher_on_target() {
     declare -A sigalgs=()
     declare -A pfses=()
     declare -A tickethints=()
+    declare -A ocspstaples=()
+    declare -A trusteds=()
     for tls_version in "${TLS_VERSIONS_TO_TEST[@]}"; do
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
@@ -628,9 +630,9 @@ test_cipher_on_target() {
         pfses[$current_protocol]="$current_pfs"
         pubkey=$current_pubkey
         sigalgs[$current_protocol]="$current_sigalg"
-        trusted=$current_trusted
+        trusteds[$current_protocol]=$current_trusted
         tickethints[$current_protocol]=$current_tickethint
-        ocspstaple=$current_ocspstaple
+        ocspstaples[$current_protocol]=$current_ocspstaple
         certificates="$current_certificates"
         # grab the cipher and PFS key size
     done
@@ -694,6 +696,42 @@ test_cipher_on_target() {
     else
         # Just extract the one value that's present and use it.
         tickethint="${tickethints[@]}"
+    fi
+
+    # Flatten the ocspstaples list to a single item if every entry is the same.
+    if (( ${#ocspstaples[*]} > 1 )); then
+        local ocspstaples_values=()
+        for each_protocol in "${protocols[@]}"; do
+            ocspstaples_values+=("${ocspstaples[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ',' "${ocspstaples_values[@]}"
+        else
+            flatten_or_join_array_by_char ',' "${ocspstaples_values[@]}"
+        fi
+        ocspstaple="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        ocspstaple="${ocspstaples[@]}"
+    fi
+
+    # Flatten the trusteds list to a single item if every entry is the same.
+    if (( ${#trusteds[*]} > 1 )); then
+        local trusteds_values=()
+        for each_protocol in "${protocols[@]}"; do
+            trusteds_values+=("${trusteds[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ',' "${trusteds_values[@]}"
+        else
+            flatten_or_join_array_by_char ',' "${trusteds_values[@]}"
+        fi
+        trusted="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        trusted="${trusteds[@]}"
     fi
 
     # Pre-join this, since we use it in a couple of places below.
@@ -1024,12 +1062,12 @@ display_results_in_json() {
         echo -n "\"protocols\":[\"${cipher_arr[1]//,/\",\"}\"],"
         echo -n "\"pubkey\":[\"${cipher_arr[2]//,/\",\"}\"],"
         echo -n "\"sigalg\":[\"${cipher_arr[3]//,/\",\"}\"],"
-        echo -n "\"trusted\":\"${cipher_arr[4]//,/\",\"}\","
+        echo -n "\"trusted\":[\"${cipher_arr[4]//,/\",\"}\"],"
         if [[ -n $CAPATH ]]; then
             echo -n "\"certificates\":[${ciphercertificates[$ctr]}],"
         fi
         echo -n "\"ticket_hint\":[\"${cipher_arr[5]//,/\",\"}\"],"
-        echo -n "\"ocsp_stapling\":\"${cipher_arr[6]}\","
+        echo -n "\"ocsp_stapling\":[\"${cipher_arr[6]//,/\",\"}\"],"
         echo -n "\"pfs\":[\"${cipher_arr[7]//\;/\",\"}\"]"
         if [[ "${cipher_arr[0]}" =~ ECDH ]]; then
             echo -n ","
