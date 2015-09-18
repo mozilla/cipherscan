@@ -458,6 +458,7 @@ parse_openssl_output() {
         while read data; do
             if [[ $data =~ $regex ]]; then
                 current_sigalg="${BASH_REMATCH[1]// /_}"
+                break
             fi
         done <<<"$ossl_out"
     fi
