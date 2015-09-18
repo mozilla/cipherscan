@@ -10,43 +10,93 @@
 
 DOBENCHMARK=0
 BENCHMARKITER=30
-DIRNAMEPATH=$(dirname "$0")
-REALPATH="$DIRNAMEPATH"
-# make sure this doesn't error out when readlink -f isn't available (OSX)
-readlink -f "$0" &>/dev/null && REALPATH=$(dirname "$(readlink -f "$0")")
-if [[ "$(uname -s)" == "Darwin" ]]; then
-    OPENSSLBIN="${REALPATH}/openssl-darwin64"
+
+# cipherscan requires bash4, which doesn't come by default in OSX
+if [[ ${BASH_VERSINFO[0]} -lt 4 ]]; then
+    echo "Bash version 4 is required to run cipherscan." 1>&2
+    echo "Please upgrade your version of bash (ex: brew install bash)." 1>&2
+    exit 1
+fi
+
+if [[ -n $NOAUTODETECT ]]; then
+    if ! [[ -f $TIMEOUTBIN && -x $TIMEOUTBIN ]]; then
+        echo "NOAUTODETECT set, but TIMEOUTBIN is not an executable file" 1>&2
+        exit 1
+    fi
+    if ! [[ -f $OPENSSLBIN && -x $OPENSSLBIN ]]; then
+        echo "NOAUTODETECT set, but OPENSSLBIN is not an executable file" 1>&2
+        exit 1
+    fi
 else
-    OPENSSLBIN="${REALPATH}/openssl"
+    case "$(uname -s)" in
+        Darwin)
+            opensslbin_name="openssl-darwin64"
+
+            READLINKBIN=$(which greadlink 2>/dev/null)
+            if [[ -z $READLINKBIN ]]; then
+                echo "greadlink not found. (try: brew install coreutils)" 1>&2
+                exit 1
+            fi
+            TIMEOUTBIN=$(which gtimeout 2>/dev/null)
+            if [[ -z $TIMEOUTBIN ]]; then
+                echo "gtimeout not found. (try: brew install coreutils)" 1>&2
+                exit 1
+            fi
+            ;;
+        *)
+            opensslbin_name="openssl"
+
+            # test that readlink or greadlink (darwin) are present
+            READLINKBIN="$(which readlink)"
+
+            if [[ "$READLINKBIN" == "" ]]; then
+                READLINKBIN="$(which greadlink)"
+                if [[ "$READLINKBIN" == "" ]]; then
+                    echo "neither readlink nor greadlink are present. install coreutils with {apt-get,yum,brew} install coreutils" 1>&2
+                    exit 1
+                fi
+            fi
+
+            # test that timeout or gtimeout (darwin) are present
+            TIMEOUTBIN="$(which timeout)"
+
+            if [[ "$TIMEOUTBIN" == "" ]]; then
+                TIMEOUTBIN="$(which gtimeout)"
+                if [[ "$TIMEOUTBIN" == "" ]]; then
+                    echo "neither timeout nor gtimeout are present. install coreutils with {apt-get,yum,brew} install coreutils" 1>&2
+                    exit 1
+                fi
+            fi
+
+            # Check for busybox, which has different arguments
+            TIMEOUTOUTPUT="$($TIMEOUTBIN --help 2>&1)"
+            if [[ "$TIMEOUTOUTPUT" =~ BusyBox ]]; then
+                TIMEOUTBIN="$TIMEOUTBIN -t"
+            fi
+
+            ;;
+    esac
+fi
+
+DIRNAMEPATH=$(dirname "$0")
+
+if [[ -z $OPENSSLBIN ]]; then
+    readlink_result=$("$READLINKBIN" -f "$0")
+    if [[ -z $readlink_result ]]; then
+        echo "$READLINKBIN -f $0 failed, aborting." 1>&2
+        exit 1
+    fi
+    REALPATH=$(dirname "$readlink_result")
+    if [[ -z $REALPATH ]]; then
+        echo "dirname $REALPATH failed, aborting." 1>&2
+        exit 1
+    fi
+    OPENSSLBIN="${REALPATH}/${opensslbin_name}"
 fi
 OPENSSLBINHELP="$($OPENSSLBIN s_client -help 2>&1)"
 if ! [[ $OPENSSLBINHELP =~ -connect ]]; then
     echo "$OPENSSLBIN s_client doesn't accept the -connect parameter, which is extremely strange; refusing to proceed." 1>&2
     exit 1
-fi
-
-# cipherscan requires bash4, which doesn't come by default in OSX
-if [[ ${BASH_VERSINFO[0]} -lt 4 ]]; then
-    echo "Bash version 4 is required to run cipherscan."
-    echo "Please upgrade your version of bash (ex: brew install bash)."
-    exit 1
-fi
-
-# test that timeout or gtimeout (darwin) are present
-TIMEOUTBIN="$(which timeout)"
-
-if [[ "$TIMEOUTBIN" == "" ]]; then
-    TIMEOUTBIN="$(which gtimeout)"
-    if [[ "$TIMEOUTBIN" == "" ]]; then
-        echo "neither timeout nor gtimeout are present. install coreutils with {apt-get,yum,brew} install coreutils"
-        exit 1
-    fi
-fi
-
-# Check for busybox, which has different arguments
-TIMEOUTOUTPUT="$($TIMEOUTBIN --help 2>&1)"
-if [[ "$TIMEOUTOUTPUT" =~ BusyBox ]]; then
-    TIMEOUTBIN="$TIMEOUTBIN -t"
 fi
 
 # use custom config file to enable GOST ciphers
