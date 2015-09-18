@@ -751,8 +751,10 @@ display_results_in_terminal() {
     done|column -t
     echo
     pubkey_eval="KO"
-    if (( $pubkey > 2047 )); then
-        pubkey_eval="OK"
+    if [[ ! -z $pubkey ]]; then
+        if (( $pubkey > 2047 )); then
+            pubkey_eval="OK"
+        fi
     fi
     sigalg_eval="OK"
     if [[ $sigalg =~ md5|sha1 ]]; then
