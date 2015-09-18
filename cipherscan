@@ -1415,13 +1415,13 @@ debug "target: $TARGET"
 if [[ ! -x $OPENSSLBIN ]]; then
     OPENSSLBIN=$(which openssl)
     if [[ "$OUTPUTFORMAT" == "terminal" ]]; then
-        echo "custom openssl not executable, falling back to system one from $OPENSSLBIN"
+        echo "custom openssl not executable, falling back to system one from $OPENSSLBIN" 1>&2
     fi
 fi
 
 if [[ $TEST_CURVES == "True" ]]; then
     if [[ ! -z "$($OPENSSLBIN s_client -curves 2>&1|head -1|grep 'unknown option')" ]]; then
-        echo "curves testing not available with your version of openssl, disabling it"
+        echo "curves testing not available with your version of openssl, disabling it" 1>&2
         TEST_CURVES="False"
     fi
 fi
