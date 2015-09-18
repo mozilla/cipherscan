@@ -508,10 +508,10 @@ test_cipher_on_target() {
     local cmnd=""
     protocols=()
     versions=()
-    pfs=""
     previous_cipher=""
     certificates=""
     declare -A sigalgs=()
+    declare -A pfses=()
     for tls_version in "${TLS_VERSIONS_TO_TEST[@]}"; do
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
@@ -623,8 +623,8 @@ test_cipher_on_target() {
         # connection succeeded, add TLS version to positive results
         protocols+=("$current_protocol")
         cipher=$current_cipher
-        pfs=$current_pfs
-        [[ -z $pfs ]] && pfs="None"
+        [[ -z $current_pfs ]] && current_pfs="None"
+        pfses[$current_protocol]="$current_pfs"
         pubkey=$current_pubkey
         sigalgs[$current_protocol]="$current_sigalg"
         trusted=$current_trusted
@@ -657,6 +657,24 @@ test_cipher_on_target() {
     else
         # Just extract the one value that's present and use it.
         sigalg="${sigalgs[@]}"
+    fi
+
+    # Flatten the pfses list to a single item if every entry is the same.
+    if (( ${#pfses[*]} > 1 )); then
+        local pfses_values=()
+        for each_protocol in "${protocols[@]}"; do
+            pfses_values+=("${pfses[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ';' "${pfses_values[@]}"
+        else
+            flatten_or_join_array_by_char ';' "${pfses_values[@]}"
+        fi
+        pfs="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        pfs="${pfses[@]}"
     fi
 
     # Pre-join this, since we use it in a couple of places below.
@@ -993,9 +1011,7 @@ display_results_in_json() {
         fi
         echo -n "\"ticket_hint\":\"${cipher_arr[5]}\","
         echo -n "\"ocsp_stapling\":\"${cipher_arr[6]}\","
-        pfs="${cipher_arr[7]}"
-        [[ -z $pfs ]] && pfs="None"
-        echo -n "\"pfs\":\"$pfs\""
+        echo -n "\"pfs\":[\"${cipher_arr[7]//\;/\",\"}\"]"
         if [[ "${cipher_arr[0]}" =~ ECDH ]]; then
             echo -n ","
             echo -n "\"curves\":[\"${cipher_arr[8]//,/\",\"}\"]"
