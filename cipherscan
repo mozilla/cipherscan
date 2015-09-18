@@ -1387,6 +1387,11 @@ if [[ -n $CAPATH && -n $CACERTS ]]; then
     exit 1
 fi
 
+if [[ -n $ALLCIPHERS && $OUTPUTFORMAT == "json" ]]; then
+    echo "--allciphers cannot produce JSON output, aborting." 1>&2
+    exit 1
+fi
+
 # echo parameters left: $@
 
 if (( $# < 1 )); then
