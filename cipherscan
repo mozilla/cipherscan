@@ -204,6 +204,7 @@ SAVECRT=""
 TEST_CURVES="True"
 has_curves="False"
 TEST_TOLERANCE="True"
+SNI="True"
 # openssl formated list of curves that will cause server to select ECC suite
 ecc_ciphers=""
 unset known_certs
@@ -248,6 +249,7 @@ Use one of the options below:
 --savecrt           path where to save untrusted and leaf certificates
 --[no-]curves       test ECC curves supported by server (req. OpenSSL 1.0.2)
 --[no-]tolerance    test TLS tolerance
+--no-sni            don't use Server Name Indication
 --no-colors         don't use terminal colors
 -v | --verbose      Increase verbosity.
 
@@ -1426,6 +1428,10 @@ do
             USECOLORS="False"
             shift 1
             ;;
+        --no-sni)
+            SNI="False"
+            shift 1
+            ;;
         --) # End of all options
             shift
             break
@@ -1470,7 +1476,13 @@ if [[ -z $TARGET || $TARGET =~ ^[-:] || $TARGET =~ :.*[^0-9] ]]; then
     exit 1
 fi
 if ! [[ $TARGET =~ : ]]; then
+    sni_target=$TARGET
     TARGET="${TARGET}:443"
+else
+    # strip the port for the sni_target
+    if [[ "$TARGET" =~ (.*):([0-9]{1,5}) ]]; then
+        sni_target="${BASH_REMATCH[1]}"
+    fi
 fi
 
 debug "target: $TARGET"
@@ -1519,6 +1531,16 @@ if [[ $VERBOSE != 0 ]] ; then
 fi
 
 SCLIENTARGS="${PARAMS[*]}"
+# only append the SNI:
+# if the target is a hostname by validating the tld
+# if -servername was not supplied by the user
+if [[ $SNI == "True"  && ! $SCLIENTARGS =~ servername ]]; then
+    if [[ $sni_target =~ \.[a-zA-Z]{1,20}$ ]]; then
+        SCLIENTARGS="$SCLIENTARGS -servername $sni_target"
+    else
+        echo "Warning: target is not a FQDN. SNI was disabled. Use a FQDN or '-servername <fqdn>'" 1>&2
+    fi
+fi
 debug "sclientargs: $SCLIENTARGS"
 
 
