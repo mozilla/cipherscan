@@ -80,30 +80,6 @@ fi
 
 DIRNAMEPATH=$(dirname "$0")
 
-if [[ -z $OPENSSLBIN ]]; then
-    readlink_result=$("$READLINKBIN" -f "$0")
-    if [[ -z $readlink_result ]]; then
-        echo "$READLINKBIN -f $0 failed, aborting." 1>&2
-        exit 1
-    fi
-    REALPATH=$(dirname "$readlink_result")
-    if [[ -z $REALPATH ]]; then
-        echo "dirname $REALPATH failed, aborting." 1>&2
-        exit 1
-    fi
-    OPENSSLBIN="${REALPATH}/${opensslbin_name}"
-fi
-OPENSSLBINHELP="$($OPENSSLBIN s_client -help 2>&1)"
-if ! [[ $OPENSSLBINHELP =~ -connect ]]; then
-    echo "$OPENSSLBIN s_client doesn't accept the -connect parameter, which is extremely strange; refusing to proceed." 1>&2
-    exit 1
-fi
-
-# use custom config file to enable GOST ciphers
-if [[ -e $DIRNAMEPATH/openssl.cnf ]]; then
-    export OPENSSL_CONF="$DIRNAMEPATH/openssl.cnf"
-fi
-
 join_array_by_char() {
     # Two or less parameters (join + 0 or 1 value), then no need to set IFS because no join occurs.
     if (( $# >= 3 )); then
@@ -1456,6 +1432,34 @@ do
             ;;
     esac
 done
+
+if [[ -z $OPENSSLBIN ]]; then
+    readlink_result=$("$READLINKBIN" -f "$0")
+    if [[ -z $readlink_result ]]; then
+        echo "$READLINKBIN -f $0 failed, aborting." 1>&2
+        exit 1
+    fi
+    REALPATH=$(dirname "$readlink_result")
+    if [[ -z $REALPATH ]]; then
+        echo "dirname $REALPATH failed, aborting." 1>&2
+        exit 1
+    fi
+    OPENSSLBIN="${REALPATH}/${opensslbin_name}"
+fi
+# use custom config file to enable GOST ciphers
+if [[ -e $DIRNAMEPATH/openssl.cnf ]]; then
+    export OPENSSL_CONF="$DIRNAMEPATH/openssl.cnf"
+fi
+OPENSSLBINHELP="$($OPENSSLBIN s_client -help 2>&1)"
+if [[ $OPENSSLBINHELP =~ :error: ]]; then
+    verbose "$OPENSSLBIN can't handle GOST config, disabling"
+    unset OPENSSL_CONF
+    OPENSSLBINHELP="$($OPENSSLBIN s_client -help 2>&1)"
+fi
+if ! [[ $OPENSSLBINHELP =~ -connect ]]; then
+    echo "$OPENSSLBIN s_client doesn't accept the -connect parameter, which is extremely strange; refusing to proceed." 1>&2
+    exit 1
+fi
 
 if [[ -n $CAPATH && -n $CACERTS ]]; then
     echo "Both directory and file with CA certificates specified" 1>&2
