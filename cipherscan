@@ -812,7 +812,7 @@ display_results_in_terminal() {
             curvesordering="${c_green}${curvesordering}${c_reset}"
         else
             if [[ $curvesordering == "" ]]; then
-                curvesordering="${c_red}none"
+                curvesordering="none"
             fi
             curvesordering="${c_red}${curvesordering}${c_reset}"
         fi
@@ -828,7 +828,7 @@ display_results_in_terminal() {
         if [[ $tls_tolerance['big-TLSv1.2'] =~ TLSv1.2 ]]; then
             echo -e "TLS Tolerance: ${c_green}yes${c_reset}"
         else
-            echo "TLS Tolerance: ${c_red}no${c_reset}"
+            echo -e "TLS Tolerance: ${c_red}no${c_reset}"
             echo "Fallbacks required:"
             for test_name in "${!tls_tolerance[@]}"; do
                 if [[ ${tls_tolerance[$test_name]} == "False" ]]; then
