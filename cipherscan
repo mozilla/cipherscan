@@ -197,7 +197,7 @@ DELAY=0
 ALLCIPHERS=""
 OUTPUTFORMAT="terminal"
 TIMEOUT=30
-USECOLORS="True"
+USECOLORS="auto"
 # place where to put the found intermediate CA certificates and where
 # trust anchors are stored
 SAVECRT=""
@@ -250,6 +250,7 @@ Use one of the options below:
 --[no-]curves       test ECC curves supported by server (req. OpenSSL 1.0.2)
 --[no-]tolerance    test TLS tolerance
 --no-sni            don't use Server Name Indication
+--colors            force use of colors (autodetect by default)
 --no-colors         don't use terminal colors
 -v | --verbose      Increase verbosity.
 
@@ -690,7 +691,14 @@ display_results_in_terminal() {
     local curvesordering
     local different=False
     # Configure colors, if terminal supports them
-    if [[ $USECOLORS == "True" && -x /usr/bin/tput ]] && tput setaf 1 >&/dev/null; then
+    if [[ $USECOLORS == "auto" ]]; then
+        if [[ -t 1 ]]; then
+            USECOLORS="True"
+        else
+            USECOLORS="False"
+        fi
+    fi
+    if [[ $USECOLORS == "True" ]]; then
         c_blue="\033[0;34m"
         c_green="\033[0;32m"
         c_red="\033[0;31m"
@@ -1420,6 +1428,10 @@ do
             ;;
         --no-tolerance)
             TEST_TOLERANCE="False"
+            shift 1
+            ;;
+        --colors)
+            USECOLORS="True"
             shift 1
             ;;
         --no-colors)
