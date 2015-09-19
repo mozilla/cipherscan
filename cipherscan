@@ -786,7 +786,7 @@ display_results_in_terminal() {
     done|column -t
     echo
     
-    if [[ ($sigalg =~ RSA && $pubkey -gt 2047) || ($sigalg =~ DSA && $pubkey -gt 255) ]]; then
+    if [[ ($sigalg =~ RSA && $pubkey -ge 2047) || ($sigalg =~ ECDSA && $pubkey -gt 255) ]]; then
         pubkey="${c_green}${pubkey}${c_reset}"
     else
         pubkey="${c_red}${pubkey}${c_reset}"
