@@ -4,7 +4,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # Authors: Julien Vehent [:ulfr] - 201{3,4}
-#          Hubert Kario - 2014
+#          Hubert Kario - 2014, 2015
 
 # vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=sh
 
@@ -207,12 +207,18 @@ TEST_TOLERANCE="True"
 SNI="True"
 # openssl formated list of curves that will cause server to select ECC suite
 ecc_ciphers=""
+TEST_KEX_SIGALG="False"
 unset known_certs
 declare -A known_certs
 unset cert_checksums
 declare -A cert_checksums
 # array with results of tolerance scans (TLS version, extensions, etc.)
 declare -A tls_tolerance
+# array with info on type of fallback on unknown sigalgs (or required ones)
+declare -A sigalgs_fallback
+# array with preferred sigalgs for aRSA and aECDSA ciphers
+declare -a sigalgs_preferred_rsa
+declare -a sigalgs_preferred_ecdsa
 
 # because running external commands like sleep incurs a fork penalty, we
 # first check if it is necessary
@@ -248,6 +254,8 @@ Use one of the options below:
 -o | --openssl      path/to/your/openssl binary you want to use.
 --savecrt           path where to save untrusted and leaf certificates
 --[no-]curves       test ECC curves supported by server (req. OpenSSL 1.0.2)
+--sigalg            test signature algorithms used in TLSv1.2 ephemeral ciphers
+                    (req. OpenSSL 1.0.2)
 --[no-]tolerance    test TLS tolerance
 --no-sni            don't use Server Name Indication
 --colors            force use of colors (autodetect by default)
@@ -368,6 +376,7 @@ parse_openssl_output() {
     # clear variables in case matching doesn't hit them
     current_ocspstaple="False"
     current_cipher=""
+    current_kex_sigalg=""
     current_pfs=""
     current_protocol=""
     current_tickethint="None"
@@ -400,6 +409,13 @@ parse_openssl_output() {
         if [[ $line =~ New,\  ]]; then
             local match=($line)
             current_cipher="${match[4]}"
+            continue
+        fi
+
+        # extract the signing algorithm used in TLSv1.2 ephemeral kex
+        if [[ $line =~ Peer\ signing\ digest ]]; then
+            local match=($line)
+            current_kex_sigalg="${match[3]}"
             continue
         fi
 
@@ -680,6 +696,21 @@ get_cipher_pref() {
     fi
 }
 
+display_sigalgs_in_terminal() {
+    (echo "prio sigalg"
+    for sigalg in "$@"; do
+        if [[ $sigalg == "MD5" ]]; then
+            color="${c_red}"
+        elif [[ $sigalg == "SHA1" ]]; then
+            color="${c_yellow}"
+        else
+            color="${c_green}"
+        fi
+        echo -e "$cnt ${color}$sigalg${c_reset}"
+        cnt=$((cnt+1))
+    done )| column -t
+}
+
 display_results_in_terminal() {
     # Display the results
     ctr=1
@@ -701,13 +732,15 @@ display_results_in_terminal() {
     if [[ $USECOLORS == "True" ]]; then
         c_blue="\033[0;34m"
         c_green="\033[0;32m"
+        c_yellow="\033[0;33m"
         c_red="\033[0;31m"
         c_reset="\033[0m"
     else
-        c_reset=
         c_blue=
         c_green=
+        c_yellow=
         c_red=
+        c_reset=
     fi
 
     echo "Target: $TARGET"; echo
@@ -832,7 +865,59 @@ display_results_in_terminal() {
         echo -e "Curves ordering: $curvesordering - fallback: $fallback_supported"
     fi
 
+    if [[ $TEST_KEX_SIGALG == "True" ]]; then
+        echo
+        echo "TLSv1.2 ephemeral sigalgs:"
+        for auth in "ECDSA" "RSA"; do
+            # not colored as neither of that results alone is good or bad
+            if [[ -z ${sigalgs_fallback[$auth]} ]]; then
+                echo "no PFS $auth ciphers detected"
+            elif [[ ${sigalgs_fallback[$auth]} == "False" ]]; then
+                echo "no PFS $auth fallback"
+            elif [[ ${sigalgs_fallback[$auth]} == "intolerant" ]]; then
+                echo "$auth test: intolerant of sigalg removal"
+            elif [[ ${sigalgs_fallback[$auth]} =~ "pfs-" ]]; then
+                echo "PFS $auth fallbacks to ${sigalgs_fallback[$auth]}"
+            else
+                echo "server forces ${sigalgs_fallback[$auth]} with $auth"
+            fi
+        done
+        if [[ ${sigalgs_ordering} == "server" ]]; then
+            echo -e "${c_green}Server side sigalg ordering${c_reset}"
+        elif [[ ${sigalgs_ordering} == "client" ]]; then
+            echo -e "${c_red}Client side sigalg ordering${c_reset}"
+        elif [[ ${sigalgs_ordering} == "unsupported" ]]; then
+            # do nothing - messages above will report that it's unsupported
+            echo -n
+        else
+            echo "Ordering test failure: ${sigalgs_ordering}"
+        fi
+
+        if [[ ${#sigalgs_preferred_ecdsa[@]} -gt 0 ]]; then
+            echo
+            if [[ ${sigalgs_preferred_ecdsa[0]} == "Fail" ]]; then
+                echo -e "${c_red}ECDSA test failed${c_reset}"
+            else
+                local cnt=1
+                echo "Supported PFS ECDSA signature algorithms"
+                display_sigalgs_in_terminal "${sigalgs_preferred_ecdsa[@]}"
+            fi
+        fi
+
+        if [[ ${#sigalgs_preferred_rsa[@]} -gt 0 ]]; then
+            echo
+            if [[ ${sigalgs_preferred_rsa[0]} == "Fail" ]]; then
+                echo -e "${c_red}RSA test failed${c_reset}"
+            else
+                local cnt=1
+                echo "Supported PFS RSA signature algorithms"
+                display_sigalgs_in_terminal "${sigalgs_preferred_rsa[@]}"
+            fi
+        fi
+    fi
+
     if [[ $TEST_TOLERANCE == "True" ]]; then
+        echo
         if [[ $tls_tolerance['big-TLSv1.2'] =~ TLSv1.2 ]]; then
             echo -e "TLS Tolerance: ${c_green}yes${c_reset}"
         else
@@ -885,6 +970,41 @@ display_results_in_json() {
     if [[ $TEST_CURVES == "True" ]]; then
         echo -n ",\"curves_fallback\":\"$fallback_supported\""
     fi
+
+    if [[ $TEST_KEX_SIGALG == "True" ]]; then
+        echo -n ',"sigalgs":{'
+        echo -n "\"ordering\":\"${sigalgs_ordering}\","
+        echo -n "\"ECDSA-fallback\":\"${sigalgs_fallback[ECDSA]}\","
+        echo -n "\"RSA-fallback\":\"${sigalgs_fallback[RSA]}\""
+        if [[ ${#sigalgs_preferred_ecdsa[@]} -gt 0 ]]; then
+            echo -n ","
+            echo -n '"ECDSA":['
+            local cnt=0
+            for sigalg in "${sigalgs_preferred_ecdsa[@]}"; do
+                if [[ $cnt -gt 0 ]]; then
+                    echo -n ','
+                fi
+                echo -n "\"$sigalg\""
+                cnt=$((cnt+1))
+            done
+            echo -n ']'
+        fi
+        if [[ ${#sigalgs_preferred_rsa[@]} -gt 0 ]]; then
+            echo -n ","
+            echo -n '"RSA":['
+            local cnt=0
+            for sigalg in "${sigalgs_preferred_rsa[@]}"; do
+                if [[ $cnt -gt 0 ]]; then
+                    echo -n ','
+                fi
+                echo -n "\"$sigalg\""
+                cnt=$((cnt+1))
+            done
+            echo -n ']'
+        fi
+        echo -n '}'
+    fi
+
     echo -n ',"configs":{'
     ctr=0
     for test_name in "${!tls_tolerance[@]}"; do
@@ -1353,6 +1473,317 @@ test_tls_tolerance() {
     fi
 }
 
+test_kex_sigalgs() {
+    local ecdsa_sigalgs=("ECDSA+SHA512" "ECDSA+SHA384" "ECDSA+SHA256"
+        "ECDSA+SHA224" "ECDSA+SHA1" "ECDSA+MD5")
+    local rsa_sigalgs=("RSA+SHA512" "RSA+SHA384" "RSA+SHA256"
+        "RSA+SHA224" "RSA+SHA1" "RSA+MD5")
+
+    local supported_rsa_ciphers=""
+    local supported_ecdsa_ciphers=""
+    local supported_ciphers=()
+
+    # check if TLS1.2 is supported by server, as tests needs it
+    # collect ciphers
+    local tls12="False"
+    for cipher in "${cipherspref[@]}"; do
+        local ciph_data=($cipher)
+        if [[ ${ciph_data[1]} =~ TLSv1.2 ]]; then
+            tls12="True"
+        fi
+        supported_ciphers+=(${ciph_data[0]})
+    done
+
+    if [[ $tls12 == "False" ]]; then
+        return
+    fi
+
+    # create cipher list for ecdsa and rsa tests that include non ephemeral
+    # ciphers for fallback
+    for cipher in "${supported_ciphers[@]}"; do
+        if [[ $cipher =~ DHE-ECDSA ]]; then
+            if [[ $supported_ecdsa_ciphers ]]; then
+                supported_ecdsa_ciphers+=":"
+            fi
+            supported_ecdsa_ciphers+="$cipher"
+        elif [[ ${supported_ecdsa_ciphers} ]]; then
+            supported_ecdsa_ciphers+=":$cipher"
+        fi
+
+        if [[ $cipher =~ DHE-RSA ]]; then
+            if [[ $supported_rsa_ciphers ]]; then
+                supported_rsa_ciphers+=":"
+            fi
+            supported_rsa_ciphers+="$cipher"
+        elif [[ ${supported_rsa_ciphers} ]]; then
+            supported_rsa_ciphers+=":$cipher"
+        fi
+    done
+
+    #
+    # Test default sigalgs for aECDSA ciphers
+    #
+    if [[ $supported_ecdsa_ciphers ]]; then
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        if [ -n "$CAPATH" ]; then
+            sslcommand+=" -CApath $CAPATH -showcerts"
+        elif [ -e "$CACERTS" ]; then
+            sslcommand+=" -CAfile $CACERTS"
+        fi
+        sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $supported_ecdsa_ciphers"
+        # since some ciphers supported by server may be SSLv2 only, we need to
+        # force use of TLSv1.2, otherwise openssl will send a SSLv2 compatible
+        # client hello
+        sslcommand+=" -no_ssl2 -no_ssl3"
+        local test_ecdsa_sigalgs=("${ecdsa_sigalgs[@]}")
+        local test_rsa_sigalgs=("${rsa_sigalgs[@]}")
+
+        while true; do
+            join_array_by_char ":" "${test_ecdsa_sigalgs[@]}" \
+                "${test_rsa_sigalgs[@]}"
+            local test_sigalgs="$joined_array"
+
+            ratelimit
+            verbose "Testing default ECDSA sig algs with $sslcommand -sigalgs $test_sigalgs"
+            local tmp=$(echo Q | $sslcommand -sigalgs $test_sigalgs 2>/dev/null)
+            parse_openssl_output <<<"$tmp"
+            verbose "server selected $current_cipher, $current_protocol, $current_kex_sigalg"
+            if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+                || $current_cipher == "0000" ]]; then
+                    if [[ ${#test_ecdsa_sigalgs[@]} -eq 0 ]]; then
+                        sigalgs_fallback["ECDSA"]="False"
+                    else
+                        sigalgs_fallback["ECDSA"]="intolerant"
+                    fi
+                    break
+            fi
+
+            if [[ $current_cipher =~ DHE-ECDSA ]]; then
+                if [[ -z $current_kex_sigalg ]]; then
+                    # if we didn't get a sigalg that means the test failed
+                    sigalgs_preferred_ecdsa=("Fail")
+                    break
+                fi
+
+                if [[ "${test_ecdsa_sigalgs[*]}" =~ "ECDSA+$current_kex_sigalg" ]]; then
+                    # save sigalg for reporting
+                    sigalgs_preferred_ecdsa+=("$current_kex_sigalg")
+
+                    # remove it from offered
+                    local id
+                    for id in "${!test_ecdsa_sigalgs[@]}"; do
+                        if [[ ${test_ecdsa_sigalgs[$id]} =~ $current_kex_sigalg ]]; then
+                            unset test_ecdsa_sigalgs[$id]
+                            break
+                        fi
+                    done
+                    # continue testing
+                else
+                    # server selected sigalg we didn't offer
+                    sigalgs_fallback["ECDSA"]="$current_kex_sigalg"
+                    break
+                fi
+            elif [[ $current_cipher =~ DHE-RSA ]]; then
+                # we got a fallback to a RSA based cipher
+                if [[ -z $current_kex_sigalg ]]; then
+                    sigalgs_fallback["ECDSA"]="pfs-rsa"
+                else
+                    sigalgs_fallback["ECDSA"]="pfs-rsa-${current_kex_sigalg}"
+                fi
+                break
+            else
+                # we got a fallback to a non PFS cipher, that's good too
+                sigalgs_fallback["ECDSA"]="soft-nopfs"
+                break
+            fi
+            [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
+        done
+    fi
+
+    #
+    # Test default sigalgs for aRSA ciphers
+    #
+    if [[ ${supported_rsa_ciphers} ]]; then
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        if [ -n "$CAPATH" ]; then
+            sslcommand+=" -CApath $CAPATH -showcerts"
+        elif [ -e "$CACERTS" ]; then
+            sslcommand+=" -CAfile $CACERTS"
+        fi
+        sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $supported_rsa_ciphers"
+        # since some ciphers supported by server may be SSLv2 only, we need to
+        # force use of TLSv1.2, otherwise openssl will send a SSLv2 compatible
+        # client hello
+        sslcommand+=" -no_ssl2 -no_ssl3"
+        local test_ecdsa_sigalgs=("${ecdsa_sigalgs[@]}")
+        local test_rsa_sigalgs=("${rsa_sigalgs[@]}")
+
+        while true; do
+            join_array_by_char ":" "${test_rsa_sigalgs[@]}" \
+                "${test_ecdsa_sigalgs[@]}"
+            local test_sigalgs="$joined_array"
+
+            ratelimit
+            verbose "Testing default RSA sig algs with $sslcommand -sigalgs $test_sigalgs"
+            local tmp=$(echo Q | $sslcommand -sigalgs $test_sigalgs 2>/dev/null)
+            parse_openssl_output <<<"$tmp"
+            verbose "server selected $current_cipher, $current_protocol, $current_kex_sigalg"
+            if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+                || $current_cipher == "0000" ]]; then
+                    if [[ ${#test_rsa_sigalgs[@]} -eq 0 ]]; then
+                        sigalgs_fallback["RSA"]="False"
+                    else
+                        sigalgs_fallback["RSA"]="intolerant"
+                    fi
+                    break
+            fi
+
+            if [[ $current_cipher =~ DHE-RSA ]]; then
+                if [[ -z $current_kex_sigalg ]]; then
+                    # if we didn't get a sigalg that means the test failed
+                    sigalgs_preferred_rsa=("Fail")
+                    break
+                fi
+
+                if [[ "${test_rsa_sigalgs[*]}" =~ "RSA+$current_kex_sigalg" ]]; then
+                    # save sigalg for reporting
+                    sigalgs_preferred_rsa+=("$current_kex_sigalg")
+
+                    # remove it from offered
+                    local id
+                    for id in "${!test_rsa_sigalgs[@]}"; do
+                        if [[ ${test_rsa_sigalgs[$id]} =~ $current_kex_sigalg ]]; then
+                            unset test_rsa_sigalgs[$id]
+                            break
+                        fi
+                    done
+                    # continue testing
+                else
+                    # server selected sigalg we didn't offer
+                    sigalgs_fallback["RSA"]="$current_kex_sigalg"
+                    break
+                fi
+            elif [[ $current_cipher =~ DHE-ECDSA ]]; then
+                # we got a fallback to an ECDSA based cipher
+                if [[ -z $current_kex_sigalg ]]; then
+                    sigalgs_fallback["RSA"]="pfs-ecdsa"
+                else
+                    sigalgs_fallback["RSA"]="pfs-ecdsa-${current_kex_sigalg}"
+                fi
+                break
+            else
+                # we got a fallback to a non PFS cipher, that's good too
+                sigalgs_fallback["RSA"]="soft-nopfs"
+                break
+            fi
+            [ "$OUTPUTFORMAT" == "terminal" ] && [ $DEBUG -lt 1 ] && echo -n '.'
+        done
+    fi
+
+    #
+    # test which ordering is preferred, server or client
+    #
+    if [[ ${#sigalgs_preferred_rsa[@]} -eq 0 \
+        && ${#sigalgs_preferred_ecdsa[@]} -eq 0 ]]; then
+        sigalgs_ordering="unsupported"
+    elif [[ ${#sigalgs_preferred_rsa[@]} -le 1 \
+        && ${#sigalgs_preferred_ecdsa[@]} -le 1 ]]; then
+        # if there is just one hash for each signature algorithm, that means
+        # the server essentially forces the signature algorithm on client
+        sigalgs_ordering="server"
+    elif [[ ${#sigalgs_preferred_ecdsa[@]} -gt 1 ]]; then
+        # in case server supports multiple ECDSA sigalgs, test just those,
+        # even if it supports RSA (since those are more important)
+
+        # completely rotate order check if negotiated changes
+        local test_sigalgs=""
+        local i
+        for ((i=${#sigalgs_preferred_ecdsa[@]}-1; i>0; i--)); do
+            test_sigalgs+="ECDSA+${sigalgs_preferred_ecdsa[$i]}:"
+        done
+        test_sigalgs+="ECDSA+${sigalgs_preferred_ecdsa[0]}"
+
+        # prepare the command to run
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        if [ -n "$CAPATH" ]; then
+            sslcommand+=" -CApath $CAPATH -showcerts"
+        elif [ -e "$CACERTS" ]; then
+            sslcommand+=" -CAfile $CACERTS"
+        fi
+        sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $supported_ecdsa_ciphers"
+        # since some ciphers supported by server may be SSLv2 only, we need to
+        # force use of TLSv1.2, otherwise openssl will send a SSLv2 compatible
+        # client hello
+        sslcommand+=" -no_ssl2 -no_ssl3"
+
+        ratelimit
+        verbose "Test ordering of sigalgs with $sslcommand -sigalgs $test_sigalgs"
+        local tmp=$(echo Q | $sslcommand -sigalgs $test_sigalgs 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "server selected $current_cipher, $current_protocol, $current_kex_sigalg"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == "0000" ]]; then
+            sigalgs_ordering="intolerant"
+        elif [[ -z $current_kex_sigalg ]] || [[ ! $current_cipher =~ DHE-ECDSA ]]; then
+            sigalgs_ordering="order-fallback"
+        else
+            if [[ ${sigalgs_preferred_ecdsa[0]} == $current_kex_sigalg ]]; then
+                sigalgs_ordering="server"
+            elif [[ ${sigalgs_preferred_ecdsa[${#sigalgs_preferred_ecdsa[@]}-1]} \
+                == $current_kex_sigalg ]]; then
+                sigalgs_ordering="client"
+            else
+                sigalgs_ordering="indeterminate"
+            fi
+        fi
+    else
+        # test ordering with RSA ciphers
+
+        # completely rotate order check if negotiated changes
+        local test_sigalgs=""
+        local i
+        for ((i=${#sigalgs_preferred_rsa[@]}-1; i>0; i--)); do
+            test_sigalgs+="RSA+${sigalgs_preferred_rsa[$i]}:"
+        done
+        test_sigalgs+="RSA+${sigalgs_preferred_rsa[0]}"
+
+        # prepare the command to run
+        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        if [ -n "$CAPATH" ]; then
+            sslcommand+=" -CApath $CAPATH -showcerts"
+        elif [ -e "$CACERTS" ]; then
+            sslcommand+=" -CAfile $CACERTS"
+        fi
+        sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $supported_rsa_ciphers"
+        # since some ciphers supported by server may be SSLv2 only, we need to
+        # force use of TLSv1.2, otherwise openssl will send a SSLv2 compatible
+        # client hello
+        sslcommand+=" -no_ssl2 -no_ssl3"
+
+        ratelimit
+        verbose "Test ordering of sigalgs with $sslcommand -sigalgs $test_sigalgs"
+        local tmp=$(echo Q | $sslcommand -sigalgs $test_sigalgs 2>/dev/null)
+        parse_openssl_output <<<"$tmp"
+        verbose "server selected $current_cipher, $current_protocol, $current_kex_sigalg"
+        if [[ -z $current_protocol || $current_cipher == "(NONE)" \
+            || $current_cipher == "0000" ]]; then
+            sigalgs_ordering="intolerant"
+        elif [[ -z $current_kex_sigalg ]] || [[ ! $current_cipher =~ DHE-RSA ]]; then
+            sigalgs_ordering="order-fallback"
+        else
+            if [[ ${sigalgs_preferred_rsa[0]} == $current_kex_sigalg ]]; then
+                sigalgs_ordering="server"
+            elif [[ ${sigalgs_preferred_rsa[${#sigalgs_preferred_rsa[@]}-1]} \
+                == $current_kex_sigalg ]]; then
+                sigalgs_ordering="client"
+            else
+                sigalgs_ordering="indeterminate"
+            fi
+        fi
+    fi
+
+}
+
 # If no options are given, give usage information and exit (with error code)
 if (( $# == 0 )); then
    usage
@@ -1420,6 +1851,10 @@ do
             ;;
         --no-curves)
             TEST_CURVES="False"
+            shift 1
+            ;;
+        --sigalg)
+            TEST_KEX_SIGALG="True"
             shift 1
             ;;
         --tolerance)
@@ -1578,6 +2013,10 @@ if [[ $TEST_TOLERANCE == "True" ]]; then
 fi
 
 test_serverside_ordering
+
+if [[ $TEST_KEX_SIGALG == "True" ]]; then
+    test_kex_sigalgs
+fi
 
 if [[ $TEST_CURVES == "True" ]]; then
     test_curves_fallback

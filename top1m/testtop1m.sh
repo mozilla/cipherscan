@@ -68,7 +68,7 @@ function scan_host() {
     if [ $? -gt 0 ]; then
         return
     fi
-    ../cipherscan --capath ca_files --saveca --curves --savecrt certs --delay 2 -json -servername $1 $2:443 > results/$1@$2
+    ../cipherscan --capath ca_files --saveca --curves --savecrt certs --delay 2 --sigalg -json -servername $1 $2:443 > results/$1@$2
 }
 
 function scan_host_no_sni() {
@@ -80,7 +80,7 @@ function scan_host_no_sni() {
     if [ $? -gt 0 ]; then
         return
     fi
-    ../cipherscan --capath ca_files --saveca --curves --savecrt certs --delay 2 -json $1:443 > results/$1
+    ../cipherscan --capath ca_files --saveca --curves --savecrt certs --delay 2 --sigalg -json $1:443 > results/$1
 }
 
 function scan_hostname() {
