@@ -890,12 +890,14 @@ display_results_in_terminal() {
                 display_sigalgs_in_terminal "${sigalgs_preferred_rsa[@]}"
             fi
         fi
+        echo
     fi
 
     if [[ $TEST_TOLERANCE == "True" ]]; then
-        if [[ $tls_tolerance['big-TLSv1.2'] =~ TLSv1.2 ]]; then
+        if [[ ${tls_tolerance['big-TLSv1.2']} =~ TLSv1\.2 ]]; then
             echo -e "TLS Tolerance: ${c_green}yes${c_reset}"
         else
+            echo
             echo -e "TLS Tolerance: ${c_red}no${c_reset}"
             echo "Fallbacks required:"
             for test_name in "${!tls_tolerance[@]}"; do
