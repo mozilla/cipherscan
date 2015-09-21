@@ -893,7 +893,6 @@ display_results_in_terminal() {
     fi
 
     if [[ $TEST_TOLERANCE == "True" ]]; then
-        echo
         if [[ $tls_tolerance['big-TLSv1.2'] =~ TLSv1.2 ]]; then
             echo -e "TLS Tolerance: ${c_green}yes${c_reset}"
         else
