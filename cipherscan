@@ -1915,8 +1915,9 @@ if (( $# < 1 )); then
 fi
 
 PARAMS=("$@")
-TARGET=${PARAMS[-1]}
-unset PARAMS[-1]
+last_element="$(( $# - 1 ))"
+TARGET=${PARAMS[$last_element]}
+unset PARAMS[$last_element]
 
 # Refuse to proceed if the hostname starts with a hyphen, since hostnames can't
 # begin with a hyphen and this likely means we accidentally parsed an option as
