@@ -1916,8 +1916,16 @@ unset PARAMS[-1]
 # Refuse to proceed if the hostname starts with a hyphen, since hostnames can't
 # begin with a hyphen and this likely means we accidentally parsed an option as
 # a hostname.
-if [[ -z $TARGET || $TARGET =~ ^[-:] || $TARGET =~ :.*[^0-9] ]]; then
+if [[ -z $TARGET || $TARGET =~ ^[-:] ]]; then
     echo "The final argument '$TARGET' is not a valid HOST[:PORT]." 1>&2
+    exit 1
+fi
+# Handle Targets that are URIs
+if [[ $TARGET =~ /([^/]+)(/|$) ]]; then
+    TARGET="${BASH_REMATCH[1]}"
+fi
+if [[ $TARGET =~ :.*[^0-9] ]]; then
+    echo "Final argument is not a valid HOST[:PORT]" >&2
     exit 1
 fi
 if ! [[ $TARGET =~ : ]]; then
