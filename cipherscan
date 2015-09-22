@@ -1881,17 +1881,22 @@ if [[ -z $OPENSSLBIN ]]; then
         exit 1
     fi
     OPENSSLBIN="${REALPATH}/${opensslbin_name}"
+    if ! [[ -x "${OPENSSLBIN}" ]]; then
+        OPENSSLBIN="$(which openssl)"  # fallback to generic openssl
+    fi
 fi
 # use custom config file to enable GOST ciphers
 if [[ -e $DIRNAMEPATH/openssl.cnf ]]; then
     export OPENSSL_CONF="$DIRNAMEPATH/openssl.cnf"
 fi
+
 OPENSSLBINHELP="$($OPENSSLBIN s_client -help 2>&1)"
 if [[ $OPENSSLBINHELP =~ :error: ]]; then
     verbose "$OPENSSLBIN can't handle GOST config, disabling"
     unset OPENSSL_CONF
     OPENSSLBINHELP="$($OPENSSLBIN s_client -help 2>&1)"
 fi
+
 if ! [[ $OPENSSLBINHELP =~ -connect ]]; then
     echo "$OPENSSLBIN s_client doesn't accept the -connect parameter, which is extremely strange; refusing to proceed." 1>&2
     exit 1
