@@ -808,7 +808,7 @@ display_results_in_terminal() {
     if [[ $trusted == "True" ]]; then
         trusted="${c_green}trusted${c_reset}"
     else
-        trusted="${c_green}untrusted${c_reset}"
+        trusted="${c_red}untrusted${c_reset}"
     fi
     if [[ $different != "True" ]]; then
         echo -e "Certificate: $trusted, $pubkey bits, $sigalg signature"
