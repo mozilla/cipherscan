@@ -138,6 +138,8 @@ fallback_ids['   '] = i
 pfssigalgfallback = defaultdict(int)
 pfssigalgs = defaultdict(int)
 pfssigalgsordering = defaultdict(int)
+compression = defaultdict(int)
+renegotiation = defaultdict(int)
 dsarsastack = 0
 total = 0
 for r,d,flist in os.walk(path):
@@ -161,6 +163,8 @@ for r,d,flist in os.walk(path):
         temppfssigalgordering = {}
         temppfssigalgfallback = {}
         temppfssigalgs = {}
+        tempcompression = {}
+        temprenegotiation = {}
         ciphertypes = 0
         AESGCM = False
         AESCBC = False
@@ -323,6 +327,13 @@ for r,d,flist in os.walk(path):
                         tempfallbacks['Big handshake intolerance'] = 1
                 except KeyError:
                     pass
+
+            """ get some extra data about server """
+            if 'renegotiation' in results:
+                temprenegotiation[results['renegotiation']] = 1
+
+            if 'compression' in results:
+                tempcompression[results['compression']] = 1
 
             """ loop over list of ciphers """
             for entry in results['ciphersuite']:
@@ -537,6 +548,12 @@ for r,d,flist in os.walk(path):
 
         for s in tempsigstats:
             sigalg[s] += 1
+
+        for s in temprenegotiation:
+            renegotiation[s] += 1
+
+        for s in tempcompression:
+            compression[s] += 1
 
         if len(tempticketstats) == 1:
             for s in tempticketstats:
@@ -784,6 +801,18 @@ print("------------------------------+---------+--------")
 for stat in sorted(pfssigalgfallback):
     percent = round(pfssigalgfallback[stat] / total * 100, 4)
     sys.stdout.write(stat.ljust(30) + " " + str(pfssigalgfallback[stat]).ljust(10) + str(percent).ljust(9) + "\n")
+
+print("\nRenegotiation             Count     Percent ")
+print("-------------------------+---------+--------")
+for stat in natural_sort(renegotiation):
+    percent = round(renegotiation[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(renegotiation[stat]).ljust(10) + str(percent).ljust(9) + "\n")
+
+print("\nCompression               Count     Percent ")
+print("-------------------------+---------+--------")
+for stat in natural_sort(compression):
+    percent = round(compression[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(25) + " " + str(compression[stat]).ljust(10) + str(percent).ljust(9) + "\n")
 
 print("\nTLS session ticket hint   Count     Percent ")
 print("-------------------------+---------+--------")
