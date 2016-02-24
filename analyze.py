@@ -7,7 +7,7 @@
 
 from __future__ import print_function
 
-import sys, os, json, subprocess, logging, argparse, platform
+import sys, os, json, subprocess, logging, argparse, platform, urllib2
 from collections import namedtuple
 from datetime import datetime
 from copy import deepcopy
@@ -22,14 +22,14 @@ def str_compat(data):
 # if `must_match` is True, the exact values are expected, if not
 # larger pfs values than the targets are acceptable
 def has_good_pfs(pfs, target_dh, target_ecc, must_match=False):
-    if 'ECDH,' in pfs:
+    if target_ecc and 'ECDH,' in pfs:
         # split string, expected format is 'ECDH,P-256,256bits'
         ecc = pfs.split(',')[2].split('b')[0]
         if int(ecc) < target_ecc:
             return False
         if must_match and int(ecc) != target_ecc:
             return False
-    elif 'DH,' in pfs:
+    elif target_dh and 'DH,' in pfs:
         dhparam = pfs.split(',')[1].split('b')[0]
         if int(dhparam) < target_dh:
             return False
@@ -41,16 +41,17 @@ def has_good_pfs(pfs, target_dh, target_ecc, must_match=False):
 # and looks for reasons to think otherwise. it will return True if
 # it finds one of these reason
 def is_fubar(results):
+    logging.debug('entering fubar evaluation')
     lvl = 'fubar'
     fubar = False
     has_ssl2 = False
     has_wrong_pubkey = False
-    has_md5_sig = False
+    has_bad_sig = False
     has_untrust_cert = False
     has_wrong_pfs = False
-    fubar_ciphers = set(all_ciphers) - set(old_ciphers)
     for conn in results['ciphersuite']:
-        if conn['cipher'] in fubar_ciphers:
+        logging.debug('testing connection %s' % conn)
+        if conn['cipher'] not in (set(old["ciphersuites"]) | set(inter["ciphersuites"]) | set(modern["ciphersuites"])):
             failures[lvl].append("remove cipher " + conn['cipher'])
             logging.debug(conn['cipher'] + ' is in the list of fubar ciphers')
             fubar = True
@@ -67,18 +68,18 @@ def is_fubar(results):
                 logging.debug(conn['pfs']+ ' is a fubar PFS parameters')
                 fubar = True
                 has_wrong_pfs = True
-        if 'md5WithRSAEncryption' in conn['sigalg']:
-            has_md5_sig = True
-            logging.debug(conn['sigalg'][0] + ' is a fubar cert signature')
-            fubar = True
+        for sigalg in conn['sigalg']:
+            if sigalg not in (set(old["certificate_signatures"]) | set(inter["certificate_signatures"]) | set(modern["certificate_signatures"])):
+                logging.debug(sigalg + ' is a fubar cert signature')
+                fubar = True
         if conn['trusted'] == 'False':
             has_untrust_cert = True
             logging.debug('The certificate is not trusted, which is quite fubar')
             fubar = True
     if has_ssl2:
         failures[lvl].append("disable SSLv2")
-    if has_md5_sig:
-        failures[lvl].append("don't use a cert with a MD5 signature")
+    if has_bad_sig:
+        failures[lvl].append("don't use a cert with a bad signature algorithm")
     if has_wrong_pubkey:
         failures[lvl].append("don't use a public key smaller than 2048 bits")
     if has_untrust_cert:
@@ -91,86 +92,83 @@ def is_fubar(results):
 # the parameters of an old configuration are not found. Those parameters
 # are defined in https://wiki.mozilla.org/Security/Server_Side_TLS#Old_backward_compatibility
 def is_old(results):
+    logging.debug('entering old evaluation')
     lvl = 'old'
-    old = True
-    has_sslv3 = False
+    isold = True
     has_3des = False
     has_sha1 = True
     has_pfs = True
     has_ocsp = True
     all_proto = []
     for conn in results['ciphersuite']:
+        logging.debug('testing connection %s' % conn)
         # flag unwanted ciphers
-        if conn['cipher'] not in old_ciphers:
+        if conn['cipher'] not in old["ciphersuites"]:
             logging.debug(conn['cipher'] + ' is not in the list of old ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
-            old = False
+            isold = False
         # verify required 3des cipher is present
         if conn['cipher'] == 'DES-CBC3-SHA':
             has_3des = True
-        # verify required ssl3 protocol is present
-        if 'SSLv3' in conn['protocols']:
-            has_sslv3 = True
         for proto in conn['protocols']:
             if proto not in all_proto:
                 all_proto.append(proto)
         # verify required sha1 signature is used
         if 'sha1WithRSAEncryption' not in conn['sigalg']:
             logging.debug(conn['sigalg'][0] + ' is a not an old signature')
-            old = False
             has_sha1 = False
         # verify required pfs parameter is used
         if conn['pfs'] != 'None':
-            if not has_good_pfs(conn['pfs'], 1024, 256, True):
+            if not has_good_pfs(conn['pfs'], old["dh_param_size"], old["ecdh_param_size"], True):
                 logging.debug(conn['pfs']+ ' is not a good PFS parameter for the old configuration')
-                old = False
                 has_pfs = False
         if conn['ocsp_stapling'] == 'False':
             has_ocsp = False
-    extra_proto = set(all_proto) - set(['SSLv3', 'TLSv1', 'TLSv1.1', 'TLSv1.2'])
+    extra_proto = set(all_proto) - set(old["tls_versions"])
     for proto in extra_proto:
         logging.debug("found protocol not wanted in the old configuration:" + proto)
         failures[lvl].append('disable ' + proto)
-        modern = False
-    missing_proto = set(['SSLv3', 'TLSv1', 'TLSv1.1', 'TLSv1.2']) - set(all_proto)
+        isold = False
+    missing_proto = set(old["tls_versions"]) - set(all_proto)
     for proto in missing_proto:
         logging.debug("missing protocol wanted in the old configuration:" + proto)
-        failures[lvl].append('consider enabling ' + proto)
-    if not has_sslv3:
-        logging.debug("SSLv3 is not supported and required by the old configuration")
-        old = False
+        failures[lvl].append('enable ' + proto)
+        isold = False
     if not has_3des:
         logging.debug("DES-CBC3-SHA is not supported and required by the old configuration")
         failures[lvl].append("add cipher DES-CBC3-SHA")
-        old = False
+        isold = False
     if not has_sha1:
         failures[lvl].append("use a certificate with sha1WithRSAEncryption signature")
-        old = False
+        isold = False
     if not has_pfs:
-        failures[lvl].append("use DHE of 1024bits and ECC of 256bits")
-        old = False
+        failures[lvl].append("use DHE of {dhe}bits and ECC of {ecdhe}bits".format(
+            dhe=old["dh_param_size"], ecdhe=old["ecdh_param_size"]))
+        isold = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
     if results['serverside'] != 'True':
         failures[lvl].append("enforce server side ordering")
-    return old
+    return isold
 
 # is_intermediate is similar to is_old but for intermediate configuration from
 # https://wiki.mozilla.org/Security/Server_Side_TLS#Intermediate_compatibility_.28default.29
 def is_intermediate(results):
+    logging.debug('entering intermediate evaluation')
     lvl = 'intermediate'
-    inter = True
+    isinter = True
     has_tls1 = False
     has_aes = False
     has_pfs = True
-    has_sha256 = True
+    has_sigalg = True
     has_ocsp = True
     all_proto = []
     for conn in results['ciphersuite']:
-        if conn['cipher'] not in intermediate_ciphers:
+        logging.debug('testing connection %s' % conn)
+        if conn['cipher'] not in inter["ciphersuites"]:
             logging.debug(conn['cipher'] + ' is not in the list of intermediate ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
-            inter = False
+            isinter = False
         if conn['cipher'] == 'AES128-SHA':
             has_aes = True
         for proto in conn['protocols']:
@@ -178,89 +176,91 @@ def is_intermediate(results):
                 all_proto.append(proto)
         if 'TLSv1' in conn['protocols']:
             has_tls1 = True
-        if conn['sigalg'][0] not in ['sha256WithRSAEncryption', 'sha384WithRSAEncryption', 'sha512WithRSAEncryption']:
+        if conn['sigalg'][0] not in inter["certificate_signatures"]:
             logging.debug(conn['sigalg'][0] + ' is a not an intermediate signature')
-            has_sha256 = False
+            has_sigalg = False
         if conn['pfs'] != 'None':
-            if not has_good_pfs(conn['pfs'], 2048, 256):
+            if not has_good_pfs(conn['pfs'], inter["dh_param_size"], inter["ecdh_param_size"], True):
                 logging.debug(conn['pfs']+ ' is not a good PFS parameter for the intermediate configuration')
                 has_pfs = False
         if conn['ocsp_stapling'] == 'False':
             has_ocsp = False
-    extra_proto = set(all_proto) - set(['TLSv1', 'TLSv1.1', 'TLSv1.2'])
+    extra_proto = set(all_proto) - set(inter["tls_versions"])
     for proto in extra_proto:
         logging.debug("found protocol not wanted in the intermediate configuration:" + proto)
         failures[lvl].append('disable ' + proto)
-        inter = False
-    missing_proto = set(['TLSv1', 'TLSv1.1', 'TLSv1.2']) - set(all_proto)
+        isinter = False
+    missing_proto = set(inter["tls_versions"]) - set(all_proto)
     for proto in missing_proto:
         logging.debug("missing protocol wanted in the intermediate configuration:" + proto)
         failures[lvl].append('consider enabling ' + proto)
     if not has_tls1:
         logging.debug("TLSv1 is not supported and required by the old configuration")
-        inter = False
+        isinter = False
     if not has_aes:
         logging.debug("AES128-SHA is not supported and required by the intermediate configuration")
         failures[lvl].append("add cipher AES128-SHA")
-        inter = False
-    if not has_sha256:
-        failures[lvl].append("consider using a SHA-256 certificate")
+        isinter = False
+    if not has_sigalg:
+        failures[lvl].append("use a certificate signed with %s" % " or ".join(inter["certificate_signatures"]))
+        isinter = False
     if not has_pfs:
         failures[lvl].append("consider using DHE of at least 2048bits and ECC of at least 256bits")
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
     if results['serverside'] != 'True':
         failures[lvl].append("enforce server side ordering")
-    return inter
+    return isinter
 
 # is_modern is similar to is_old but for modern configuration from
 # https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility
 def is_modern(results):
+    logging.debug('entering modern evaluation')
     lvl = 'modern'
-    modern = True
+    ismodern = True
     has_pfs = True
-    has_sha256 = True
+    has_sigalg = True
     has_ocsp = True
     all_proto = []
     for conn in results['ciphersuite']:
-        if conn['cipher'] not in modern_ciphers:
+        logging.debug('testing connection %s' % conn)
+        if conn['cipher'] not in modern["ciphersuites"]:
             logging.debug(conn['cipher'] + ' is not in the list of modern ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
-            modern = False
+            ismodern = False
         for proto in conn['protocols']:
             if proto not in all_proto:
                 all_proto.append(proto)
-        if conn['sigalg'][0] not in ['sha256WithRSAEncryption', 'sha384WithRSAEncryption', 'sha512WithRSAEncryption']:
+        if conn['sigalg'][0] not in modern["certificate_signatures"]:
             logging.debug(conn['sigalg'][0] + ' is a not an modern signature')
-            modern = False
-            has_sha256 = False
+            has_sigalg = False
         if conn['pfs'] != 'None':
-            if not has_good_pfs(conn['pfs'], 2048, 256):
+            if not has_good_pfs(conn['pfs'], modern["dh_param_size"], modern["ecdh_param_size"], True):
                 logging.debug(conn['pfs']+ ' is not a good PFS parameter for the modern configuration')
-                modern = False
+                ismodern = False
                 has_pfs = False
         if conn['ocsp_stapling'] == 'False':
             has_ocsp = False
-    extra_proto = set(all_proto) - set(['TLSv1.1', 'TLSv1.2'])
+    extra_proto = set(all_proto) - set(modern["tls_versions"])
     for proto in extra_proto:
         logging.debug("found protocol not wanted in the modern configuration:" + proto)
         failures[lvl].append('disable ' + proto)
-        modern = False
-    missing_proto = set(['TLSv1.1', 'TLSv1.2']) - set(all_proto)
+        ismodern = False
+    missing_proto = set(modern["tls_versions"]) - set(all_proto)
     for proto in missing_proto:
         logging.debug("missing protocol wanted in the modern configuration:" + proto)
         failures[lvl].append('consider enabling ' + proto)
-    if not has_sha256:
-        failures[lvl].append("use a SHA-256 certificate")
-        modern = False
+    if not has_sigalg:
+        failures[lvl].append("use a certificate signed with %s" % " or ".join(modern["certificate_signatures"]))
+        ismodern = False
     if not has_pfs:
         failures[lvl].append("use DHE of at least 2048bits and ECC of at least 256bits")
-        modern = False
+        ismodern = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
     if results['serverside'] != 'True':
         failures[lvl].append("enforce server side ordering")
-    return modern
+    return ismodern
 
 def is_ordered(results, ref_ciphersuite, lvl):
     ordered = True
@@ -293,17 +293,17 @@ def evaluate_all(results):
 
     if is_old(results):
         status = "old"
-        if not is_ordered(results, old_ciphers, "old"):
+        if not is_ordered(results, old["ciphersuites"], "old"):
             status = "old with bad ordering"
 
     if is_intermediate(results):
         status = "intermediate"
-        if not is_ordered(results, intermediate_ciphers, "intermediate"):
+        if not is_ordered(results, inter["ciphersuites"], "intermediate"):
             status = "intermediate with bad ordering"
 
     if is_modern(results):
         status = "modern"
-        if not is_ordered(results, modern_ciphers, "modern"):
+        if not is_ordered(results, modern["ciphersuites"], "modern"):
             status = "modern with bad ordering"
 
     if is_fubar(results):
@@ -312,6 +312,7 @@ def evaluate_all(results):
     return status
 
 def process_results(data, level=None, do_json=False, do_nagios=False):
+    logging.debug('processing results on %s' % data)
     exit_status = 0
     results = dict()
     # initialize the failures struct
@@ -383,77 +384,28 @@ def process_results(data, level=None, do_json=False, do_nagios=False):
                     exit_status = 1
     return exit_status
 
-def build_ciphers_lists(opensslbin):
-    global all_ciphers, old_ciphers, intermediate_ciphers, modern_ciphers, errors
-    # from https://wiki.mozilla.org/Security/Server_Side_TLS
-    allC = 'ALL:COMPLEMENTOFALL:+aRSA'
-    oldC = 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-S' \
-           'HA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM' \
-           '-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-' \
-           'AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA' \
-           '384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AE' \
-           'S128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-' \
-           'AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES' \
-           '256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SH' \
-           'A:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!E' \
-           'DH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'
-    intC = 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-S' \
-           'HA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM' \
-           '-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-' \
-           'AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA' \
-           '384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AE' \
-           'S128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-' \
-           'AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES' \
-           '256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DE' \
-           'S-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SH' \
-           'A:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA'
-    modernC = 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-S' \
-              'HA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM' \
-              '-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-' \
-              'AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA' \
-              '384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AE' \
-              'S128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-' \
-              'AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK'
-    blackhole = open(os.devnull, 'w')
+def build_ciphers_lists():
+    sstlsurl = "https://statics.tls.security.mozilla.org/server-side-tls-conf.json"
+    conf = dict()
+    try:
+        raw = urllib2.urlopen(sstlsurl).read()
+        conf = json.loads(raw)
+        logging.debug('retrieving online server side tls recommendations from %s' % sstlsurl)
+    except:
+        print("failed to retrieve JSON configurations from %s" % sstlsurl)
+        sys.exit(23)
 
-    # use system openssl if not on linux 64
-    if not opensslbin:
-        if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
-            opensslbin = mypath + '/openssl'
-        elif platform.system() == 'Darwin' and platform.architecture()[0] == '64bit':
-            opensslbin = mypath + '/openssl-darwin64'
-        else:
-            opensslbin='openssl'
-            print("warning: analyze.py is using system's openssl, which may limit the tested ciphers and recommendations")
-
-    logging.debug('Loading all ciphers: ' + allC)
-    all_ciphers = subprocess.Popen([opensslbin, 'ciphers', allC],
-        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
-    all_ciphers = str_compat(all_ciphers)
-    all_ciphers = str(all_ciphers).split(":")
-    logging.debug('Loading old ciphers: ' + oldC)
-    old_ciphers = subprocess.Popen([opensslbin, 'ciphers', oldC],
-        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
-    old_ciphers = str_compat(old_ciphers)
-    old_ciphers = str(old_ciphers).split(':')
-    logging.debug('Loading intermediate ciphers: ' + intC)
-    intermediate_ciphers = subprocess.Popen([opensslbin, 'ciphers', intC],
-        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
-    intermediate_ciphers = str_compat(intermediate_ciphers)
-    intermediate_ciphers = str(intermediate_ciphers).split(':')
-    logging.debug('Loading modern ciphers: ' + modernC)
-    modern_ciphers = subprocess.Popen([opensslbin, 'ciphers', modernC],
-        stderr=blackhole, stdout=subprocess.PIPE).communicate()[0].rstrip()
-    modern_ciphers = str_compat(modern_ciphers)
-    modern_ciphers = str(modern_ciphers).split(':')
-    blackhole.close()
+    global old, inter, modern
+    old = conf["configurations"]["old"]
+    inter = conf["configurations"]["intermediate"]
+    modern = conf["configurations"]["modern"]
 
 def main():
     parser = argparse.ArgumentParser(
         description='Analyze cipherscan results and provides guidelines to improve configuration.',
         usage='\n* Analyze a single target, invokes cipherscan: $ ./analyze.py -t [target]' \
               '\n* Evaluate json results passed through stdin:  $ python analyze.py < target_results.json' \
-              '\nexample: ./analyze.py mozilla.org',
+              '\nexample: ./analyze.py -t mozilla.org',
         epilog='Julien Vehent [:ulfr] - 2014')
     parser.add_argument('-d', dest='debug', action='store_true',
         help='debug output')
@@ -488,7 +440,7 @@ def main():
     if args.operator:
         operator=args.operator
 
-    build_ciphers_lists(args.openssl)
+    build_ciphers_lists()
 
     if args.target:
         # evaluate target specified as argument
