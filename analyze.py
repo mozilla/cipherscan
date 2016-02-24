@@ -404,7 +404,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Analyze cipherscan results and provides guidelines to improve configuration.',
         usage='\n* Analyze a single target, invokes cipherscan: $ ./analyze.py -t [target]' \
-              '\n* Evaluate json results passed through stdin:  $ python analyze.py < target_results.json' \
+              '\n* Evaluate json results passed through stdin:  $ python analyze.py target_results.json' \
               '\nexample: ./analyze.py -t mozilla.org',
         epilog='Julien Vehent [:ulfr] - 2014')
     parser.add_argument('-d', dest='debug', action='store_true',
