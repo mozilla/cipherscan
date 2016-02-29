@@ -391,6 +391,10 @@ def build_ciphers_lists():
         raw = urllib2.urlopen(sstlsurl).read()
         conf = json.loads(raw)
         logging.debug('retrieving online server side tls recommendations from %s' % sstlsurl)
+    except urllib2.URLError:
+        with open('server-side-tls-conf.json', 'r') as f:
+            conf = json.load(f)
+            logging.debug('Error connecting to %s; using local archive of server side tls recommendations' % sstlsurl)
     except:
         print("failed to retrieve JSON configurations from %s" % sstlsurl)
         sys.exit(23)
