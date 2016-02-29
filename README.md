@@ -226,3 +226,4 @@ Contributors
 * Phil Cohen <phlipper@users.noreply.github.com>
 * Samuel Kleiner <sam@firstbanco.com>
 * Richard Soderberg <https://twitter.com/floatingatoll>
+* Adam Crosby <adamcrosby@users.noreply.github.com>
