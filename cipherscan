@@ -564,7 +564,8 @@ test_cipher_on_target() {
             # signed ones)
             local saved="False"
             if ${OPENSSLBIN} verify "${trust_source[@]}" \
-                -untrusted <(printf "%s" "${current_raw_certificates[@]}") <(echo "$cert") 2>/dev/null | \
+                -untrusted <(printf "%s" "${current_raw_certificates[@]}") \
+                <(echo "$cert") 2>/dev/null | \
                 grep ': OK$' >/dev/null; then
 
                 # if the certificate is an intermediate CA it may be useful
@@ -661,7 +662,8 @@ test_cipher_on_target() {
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
     local ciphersuite="$1"
-    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $ciphersuite"
+    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS"
+    sslcommand+=" -connect $TARGET -cipher $ciphersuite"
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
