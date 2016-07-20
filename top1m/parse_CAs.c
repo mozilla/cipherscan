@@ -108,7 +108,7 @@ char *hash_to_filename(const char *hash)
 // will indicate which certificate were used for verification, whatever
 // the chain was trusted and if all certificates needed for verification
 // (with the exception of root CA) were present in hashes
-int process_chain(const char **cert_hashes)
+int process_chain(const char **cert_hashes, time_t v_time)
 {
     int ret;
     int rc; // return code from function
@@ -120,6 +120,7 @@ int process_chain(const char **cert_hashes)
     X509_STORE *store;
 
     X509_STORE_CTX *csc;
+    X509_VERIFY_PARAM *vp;
 
     STACK_OF(X509) *ustack;
     STACK_OF(X509) *vstack;
@@ -158,6 +159,14 @@ int process_chain(const char **cert_hashes)
         free(f_name);
     }
 
+    // prepare store parameters
+    vp = X509_VERIFY_PARAM_new();
+    if (vp == NULL) {
+        printf("out of memory\n");
+        return 1;
+    }
+    X509_VERIFY_PARAM_set_time(vp, v_time);
+
     // first try with just trusted certificates
 
     store = SSL_CTX_get_cert_store(trusted_only);
@@ -166,6 +175,7 @@ int process_chain(const char **cert_hashes)
         return 1;
     }
     X509_STORE_set_flags(store, X509_V_FLAG_TRUSTED_FIRST);
+    X509_STORE_set1_param(store, vp);
 
     csc = X509_STORE_CTX_new();
 
@@ -216,6 +226,7 @@ int process_chain(const char **cert_hashes)
         return 1;
     }
     X509_STORE_set_flags(store, X509_V_FLAG_TRUSTED_FIRST);
+    X509_STORE_set1_param(store, vp);
 
     csc = X509_STORE_CTX_new();
 
@@ -389,7 +400,7 @@ err:
 }
 
 // process all ciphersuites one by one from a given host results file
-int process_host_results(char *filename)
+int process_host_results(char *filename, time_t v_time)
 {
     int fd;
     int ret = 0;
@@ -456,7 +467,7 @@ int process_host_results(char *filename)
         if (rc == 0 && j > 0) {
             if (first_printed != 0)
                 printf(",");
-            if (process_chain(certs) != 0) {
+            if (process_chain(certs, v_time) != 0) {
                 fprintf(stderr, "error while processing chains!\n");
             } else {
                 first_printed = 1;
@@ -489,8 +500,20 @@ int main(int argc, char** argv)
 
     DIR *dirp;
     struct dirent *direntp;
+    time_t v_time;
 
     char buffer[MAX_BUFFER_SIZE] = {};
+
+    if (argc < 2) {
+        v_time = time(NULL);
+    } else {
+        char *endptr;
+        v_time = (time_t)strtoul(argv[0], &endptr, 10);
+        if (*endptr != '\0') {
+            fprintf(stderr, "time parameter is not a valid number\n");
+            return 1;
+        }
+    }
 
     SSL_load_error_strings();
     SSL_library_init();
@@ -534,7 +557,7 @@ int main(int argc, char** argv)
             abort();
         }
 
-        ret = process_host_results(buffer);
+        ret = process_host_results(buffer, v_time);
         if (ret == 1) {
             fprintf(stderr, "error while processing %s\n", buffer);
         }
