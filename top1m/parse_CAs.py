@@ -61,7 +61,8 @@ def get_path_for_hash(cert_hash):
     if not os.path.exists(f_name):
         f_name = ca_certs_path + '/' + cert_hash + '.pem'
         if not os.path.exists(f_name):
-            #print("File with hash " + c_hash + " is missing!")
+            sys.stderr.write("File with hash {0} ({1}) is missing!\n".format(
+                cert_hash, f_name))
             return None
     return f_name
 
