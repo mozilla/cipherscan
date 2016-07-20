@@ -1,0 +1,5 @@
+Scripts for scanning the Alexa top 1 million[1] sites and providing generic
+statistics about them.
+
+
+ 1 - http://s3.amazonaws.com/alexa-static/top-1m.csv.zip
