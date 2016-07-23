@@ -68,6 +68,19 @@ client_ciphers['FF 35']=[
         'RC4-SHA',
         'RC4-MD5']
 
+client_ciphers['FF 44']=[
+        'ECDHE-ECDSA-AES128-GCM-SHA256',
+        'ECDHE-RSA-AES128-GCM-SHA256',
+        'ECDHE-ECDSA-AES256-SHA',
+        'ECDHE-ECDSA-AES128-SHA',
+        'ECDHE-RSA-AES128-SHA',
+        'ECDHE-RSA-AES256-SHA',
+        'DHE-RSA-AES128-SHA',
+        'DHE-RSA-AES256-SHA',
+        'AES128-SHA',
+        'AES256-SHA',
+        'DES-CBC3-SHA']
+
 report_untrused=False
 
 cipherstats = defaultdict(int)
@@ -76,11 +89,15 @@ cipherstats = defaultdict(int)
 # ciphers selected by them, unsupported, etc.
 client_RC4_Only_cipherstats={}
 client_RC4_preferred_cipherstats={}
+client_3DES_Only_cipherstats={}
+client_3DES_preferred_cipherstats={}
 client_incompatible_cipherstats={}
 client_selected_cipherstats={}
 for client_name in client_ciphers:
     client_RC4_Only_cipherstats[client_name] = defaultdict(int)
     client_RC4_preferred_cipherstats[client_name] = defaultdict(int)
+    client_3DES_Only_cipherstats[client_name] = defaultdict(int)
+    client_3DES_preferred_cipherstats[client_name] = defaultdict(int)
     client_incompatible_cipherstats[client_name] = defaultdict(int)
     client_selected_cipherstats[client_name] = defaultdict(int)
 
@@ -176,16 +193,20 @@ for r,d,flist in os.walk(path):
         GOST89_cipher = False
         """ variables to support handshake simulation for different clients """
         client_RC4_Only={}
+        client_3DES_Only={}
         client_compat={}
         temp_client_incompat={}
         client_RC4_Pref={}
+        client_3DES_Pref={}
         client_selected={}
         for client_name in client_ciphers:
             # the following depends on client_compat, so by default it can be True
             client_RC4_Only[client_name]=True
+            client_3DES_Only[client_name]=True
             client_compat[client_name]=False
             temp_client_incompat[client_name]={}
             client_RC4_Pref[client_name]=None
+            client_3DES_Pref[client_name]=None
             client_selected[client_name]=None
 
         """ server side list of supported ciphers """
@@ -356,6 +377,8 @@ for r,d,flist in os.walk(path):
                         client_compat[client_name]=True
                         if not 'RC4' in entry['cipher']:
                             client_RC4_Only[client_name] = False
+                        if not 'CBC3' in entry['cipher']:
+                            client_3DES_Only[client_name] = False
                     else:
                         temp_client_incompat[client_name][entry['cipher']] = 1
 
@@ -534,6 +557,8 @@ for r,d,flist in os.walk(path):
                             client_selected[client_name] = cipher
                             if 'RC4' in cipher:
                                 client_RC4_Pref[client_name] = True
+                            if 'CBC3' in cipher:
+                                client_3DES_Pref[client_name] = True
                             break
                 else:
                     for cipher in list_of_ciphers:
@@ -541,6 +566,8 @@ for r,d,flist in os.walk(path):
                             client_selected[client_name] = cipher
                             if 'RC4' in cipher:
                                 client_RC4_Pref[client_name] = True
+                            if 'CBC3' in cipher:
+                                client_3DES_Pref[client_name] = True
                             break
 
         for s in tempfallbacks:
@@ -602,6 +629,12 @@ for r,d,flist in os.walk(path):
             cipherstats['3DES'] += 1
             if ciphertypes == 1:
                 cipherstats['3DES Only'] += 1
+            if 'CBC3' in results['ciphersuite'][0]['cipher']:
+                if 'TLSv1.1' in results['ciphersuite'][0]['protocols'] or\
+                   'TLSv1.2' in results['ciphersuite'][0]['protocols']:
+                        cipherstats['3DES forced in TLS1.1+'] += 1
+                cipherstats['3DES Preferred'] += 1
+
         if CAMELLIA:
             cipherstats['CAMELLIA'] += 1
             if ciphertypes == 1:
@@ -636,6 +669,14 @@ for r,d,flist in os.walk(path):
                     cipherstats['x:' + client_name + ' RC4 Preferred'] += 1
                     for cipher in temp_client_incompat[client_name]:
                         client_RC4_preferred_cipherstats[client_name][cipher] += 1
+                if client_3DES_Only[client_name]:
+                    cipherstats['x:' + client_name + ' 3DES Only'] += 1
+                    for cipher in temp_client_incompat[client_name]:
+                        client_3DES_Only_cipherstats[client_name][cipher] += 1
+                if client_3DES_Pref[client_name]:
+                    cipherstats['x:' + client_name + ' 3DES Preferred'] += 1
+                    for cipher in temp_client_incompat[client_name]:
+                        client_3DES_preferred_cipherstats[client_name][cipher] += 1
             else:
                 cipherstats['x:' + client_name + ' incompatible'] += 1
                 for cipher in temp_client_incompat[client_name]:
