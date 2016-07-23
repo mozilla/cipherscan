@@ -40,7 +40,7 @@ if [ ! -x ./parse_CAs ]; then
 fi
 
 echo "Verifying certificate chains from results files"
-./parse_CAs > parsed
+./parse_CAs "$@" > parsed
 echo "Calculating statistics for verified certificate chains"
 python parse_CAs.py > trust_scan
 echo "Done!"
