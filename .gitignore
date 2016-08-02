@@ -1,2 +1,10 @@
 mozilla/*
 top1m/results/*
+tlslite
+.tlslite-ng
+*/__pycache__
+*.pyc
+.coverage
+.python-ecdsa
+ecdsa
+tlslite

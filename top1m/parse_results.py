@@ -113,6 +113,7 @@ eccordering = defaultdict(int)
 ecccurve = defaultdict(int)
 ocspstaple = defaultdict(int)
 fallbacks = defaultdict(int)
+intolerancies = defaultdict(int)
 # array with indexes of fallback names for the matrix report
 fallback_ids = defaultdict(int)
 i=0
@@ -175,6 +176,7 @@ for r,d,flist in os.walk(path):
         tempeccordering = "unknown"
         tempecccurve = {}
         tempfallbacks = {}
+        tempintolerancies = {}
         """ supported ciphers by the server under scan """
         tempcipherstats = {}
         temppfssigalgordering = {}
@@ -348,6 +350,21 @@ for r,d,flist in os.walk(path):
                         tempfallbacks['Big handshake intolerance'] = 1
                 except KeyError:
                     pass
+
+            if 'intolerancies' in results:
+                intoler = results['intolerancies']
+                for name, val in intoler.items():
+                    if val is True:
+                        tempintolerancies[name] = 1
+                size_intol = [x.replace('size ', '')
+                              for x in tempintolerancies.keys()
+                              if x.startswith('size ')]
+                if size_intol:
+                    size_intol.sort(reverse=True)
+                    tempintolerancies['size {0}'
+                                      .format(" ".join(size_intol))] = 1
+            else:
+                tempintolerancies['x:missing information'] = 1
 
             """ get some extra data about server """
             if 'renegotiation' in results:
@@ -572,6 +589,9 @@ for r,d,flist in os.walk(path):
 
         for s in tempfallbacks:
             fallbacks[s] += 1
+
+        for s in tempintolerancies:
+            intolerancies[s] += 1
 
         for s in tempsigstats:
             sigalg[s] += 1
@@ -902,3 +922,9 @@ print("------------------------")
 fallback_ids_sorted=sorted(fallback_ids.items(), key=operator.itemgetter(1))
 for touple in fallback_ids_sorted:
     print(str(touple[1]+1).rjust(3) + "  " + str(touple[0]))
+
+print("\nClient Hello intolerance                 Count     Percent")
+print("----------------------------------------+---------+-------")
+for stat in sorted(intolerancies):
+    percent = round(intolerancies[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(40) + " " + str(intolerancies[stat]).ljust(10) + str(percent).ljust(4) + "\n")

@@ -965,6 +965,8 @@ display_results_in_terminal() {
             done | sort
         fi
     fi
+
+    echo "$cscan_tests"
 }
 
 display_results_in_json() {
@@ -1064,7 +1066,12 @@ display_results_in_json() {
         echo -n "}"
         ctr=$((ctr+1))
     done
-    echo '}}'
+    echo -n '}'
+    if [[ -n $cscan_tests ]]; then
+        echo -n ',"intolerancies":'
+        echo -n "$cscan_tests"
+    fi
+    echo '}'
 }
 
 test_serverside_ordering() {
@@ -1532,6 +1539,17 @@ test_tls_tolerance() {
                 tls_tolerance['small-SSLv3']="False"
         else
             tls_tolerance['small-SSLv3']="True $current_protocol $current_cipher $current_trusted"
+        fi
+    fi
+
+    # finally run the Python based test to perform more precise scan
+    if [[ "$OUTPUTFORMAT" == "json" ]]; then
+        cscan_tests="$($DIRNAMEPATH/cscan.sh -j $TARGET $sni_target)"
+    else
+        if [[ $VERBOSE != 0 ]]; then
+            cscan_tests="$($DIRNAMEPATH/cscan.sh -v --no-header $TARGET $sni_target)"
+        else
+            cscan_tests="$($DIRNAMEPATH/cscan.sh --no-header $TARGET $sni_target)"
         fi
     fi
 }
