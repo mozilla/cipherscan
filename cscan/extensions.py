@@ -3,11 +3,13 @@
 
 """Extra TLS extensions."""
 
+import binascii
+
 import tlslite.extensions
 from tlslite.utils.codec import Writer
 from tlslite.utils.compat import b2a_hex
 from .constants import ExtensionType, GroupName
-import .messages
+from . import messages
 
 # make TLSExtensions hashable (__eq__ is already defined in base class)
 tlslite.extensions.TLSExtension.__hash__ = lambda self: hash(self.extType) ^ \

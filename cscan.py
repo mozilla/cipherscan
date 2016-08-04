@@ -5,15 +5,21 @@
 from __future__ import print_function
 from tlslite.messages import ClientHello, ServerHello, ServerHelloDone, Alert
 from tlslite.constants import CipherSuite, \
-        AlertLevel
+        ExtensionType, AlertLevel
+from tlslite.extensions import TLSExtension
 import sys
 import json
 import getopt
 import itertools
+import copy
 
 from cscan.scanner import Scanner
-from cscan.config import Firefox_42
-from cscan.modifiers import set_hello_version
+from cscan.config import Xmas_tree, IE_6, IE_8_Win_XP, \
+        IE_11_Win_7, IE_11_Win_8_1, Firefox_46, Firefox_42, HugeCipherList, \
+        VeryCompatible
+from cscan.modifiers import no_sni, set_hello_version, set_record_version, \
+        no_extensions, truncate_ciphers_to_size, append_ciphers_to_size, \
+        extend_with_ext_to_size, add_empty_ext
 
 
 def scan_with_config(host, port, conf, hostname, __sentry=None, __cache={}):
@@ -30,6 +36,26 @@ def scan_with_config(host, port, conf, hostname, __sentry=None, __cache={}):
         print(".", end='')
         sys.stdout.flush()
     return ret
+
+
+class IE_6_ext_tls_1_0(IE_6):
+    def __init__(self):
+        super(IE_6_ext_tls_1_0, self).__init__()
+        self.modifications += ["TLSv1.0", "ext"]
+        self.version = (3, 1)
+        self.record_version = (3, 0)
+
+    def __call__(self, hostname):
+        ret = super(IE_6_ext_tls_1_0, self).__call__(hostname)
+        ret.ssl2 = False
+        # filter out SSLv2 ciphersuites
+        ret.cipher_suites = [i for i in ret.cipher_suites if i <= 0xffff and
+                             i != CipherSuite.
+                             TLS_EMPTY_RENEGOTIATION_INFO_SCSV]
+        ret.extensions = [TLSExtension(extType=ExtensionType.
+                                       renegotiation_info)
+                          .create(bytearray(1))]
+        return ret
 
 
 def simple_inspector(result):
@@ -89,20 +115,122 @@ configs = {}
 
 def load_configs():
     """Load known client configurations for later use in scanning."""
-    base_configs = [Firefox_42]
+    base_configs = [Xmas_tree, Firefox_42, IE_8_Win_XP, IE_11_Win_7,
+                    VeryCompatible]
     for conf in base_configs:
+        # only no extensions
+        gen = no_extensions(conf())
+        configs[gen.name] = gen
+
+        gen = no_sni(conf())
+        configs[gen.name] = gen
+
         for version in ((3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 254)):
             if conf().version != version:
                 # just changed version
                 gen = set_hello_version(conf(), version)
                 if gen.record_version > version:
-                    gen.record_version = version
+                    gen = set_record_version(gen, version)
                 configs[gen.name] = gen
+
+                # changed version and no extensions
+                gen = set_hello_version(conf(), version)
+                if gen.record_version > version:
+                    gen = set_record_version(gen, version)
+                gen = no_extensions(gen)
+                configs[gen.name] = gen
+
+                # changed version and no sni
+                gen = set_hello_version(conf(), version)
+                if gen.record_version > version:
+                    gen = set_record_version(gen, version)
+                gen = no_sni(gen)
+                configs[gen.name] = gen
+
+    # Xmas tree configs
+    gen = Xmas_tree()
+    configs[gen.name] = gen
+
+    gen = no_sni(Xmas_tree())
+    configs[gen.name] = gen
 
     # Firefox 42 configs
     gen = Firefox_42()
     configs[gen.name] = gen
 
+    # Firefox 46 configs
+    gen = Firefox_46()
+    configs[gen.name] = gen
+
+    gen = set_hello_version(Firefox_46(), (3, 254))
+    configs[gen.name] = gen
+
+    gen = set_hello_version(Firefox_46(), (3, 5))
+    configs[gen.name] = gen
+
+    gen = no_extensions(set_hello_version(Firefox_46(), (3, 5)))
+    configs[gen.name] = gen
+
+    gen = set_hello_version(Firefox_46(), (3, 1))
+    configs[gen.name] = gen
+
+    # IE 6 configs
+    gen = IE_6()
+    configs[gen.name] = gen
+
+    gen = IE_6_ext_tls_1_0()
+    configs[gen.name] = gen
+
+    # IE 8 configs
+    gen = IE_8_Win_XP()
+    configs[gen.name] = gen
+
+    gen = extend_with_ext_to_size(IE_8_Win_XP(), 200)
+    configs[gen.name] = gen
+
+    for ext_id in (0, 1, 2, 3, 4, 5):
+        gen = add_empty_ext(IE_8_Win_XP(), ext_id)
+        configs[gen.name] = gen
+
+    # IE 11 on Win 7 configs
+    gen = IE_11_Win_7()
+    configs[gen.name] = gen
+
+    gen = no_sni(IE_11_Win_7())
+    configs[gen.name] = gen
+
+    gen = set_hello_version(no_sni(IE_11_Win_7()), (3, 2))
+    configs[gen.name] = gen
+
+    # IE 11 on Win 8.1 configs
+    gen = IE_11_Win_8_1()
+    configs[gen.name] = gen
+
+    gen = set_hello_version(IE_11_Win_8_1(), (3, 1))
+    configs[gen.name] = gen
+
+    gen = set_hello_version(IE_11_Win_8_1(), (3, 4))
+    configs[gen.name] = gen
+
+    # Huge Cipher List
+    gen = HugeCipherList()
+    configs[gen.name] = gen
+
+    gen = truncate_ciphers_to_size(HugeCipherList(), 16388)
+    configs[gen.name] = gen
+
+    # Very Compatible
+    gen = VeryCompatible()
+    configs[gen.name] = gen
+
+    gen = append_ciphers_to_size(VeryCompatible(), 2**16)
+    configs[gen.name] = gen
+
+    gen = extend_with_ext_to_size(VeryCompatible(), 2**16)
+    configs[gen.name] = gen
+
+    gen = extend_with_ext_to_size(VeryCompatible(), 16388)
+    configs[gen.name] = gen
 
 def scan_TLS_intolerancies(host, port, hostname):
     """Look for intolerancies (version, extensions, ...) in a TLS server."""
@@ -159,6 +287,9 @@ def scan_TLS_intolerancies(host, port, hostname):
                                                  conf.version == (3, 2)))
     intolerancies["TLS 1.0"] = all(conf_iterator(lambda conf:
                                                  conf.version == (3, 1)))
+    intolerancies["extensions"] = all(conf_iterator(lambda conf:
+                                                    conf.extensions and not
+                                                    conf.ssl2))
 
     if json_out:
         print(json.dumps(intolerancies))
