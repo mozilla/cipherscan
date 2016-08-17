@@ -482,6 +482,7 @@ parse_openssl_output() {
         while read data; do
             if [[ $data =~ $regex ]]; then
                 current_sigalg="${BASH_REMATCH[1]// /_}"
+                break
             fi
         done <<<"$ossl_out"
     fi
@@ -629,34 +630,34 @@ test_cipher_on_target() {
         verbose "handshake failed, no ciphersuite was returned"
         result='ConnectionFailure'
         return 2
+    fi
 
     # if cipher contains NONE, the cipher wasn't accepted
-    elif [[ "$cipher" == '(NONE)  ' ]]; then
+    if [[ "$cipher" == '(NONE)  ' ]]; then
         result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
+    fi
 
     # the connection succeeded
-    else
-        current_curves="None"
-        # if pfs uses ECDH, test supported curves
-        if [[ $pfs =~ ECDH ]]; then
-            has_curves="True"
-            if [[ $TEST_CURVES == "True" ]]; then
-                test_curves
-                if [[ -n $ecc_ciphers ]]; then
-                    ecc_ciphers+=":"
-                fi
-                ecc_ciphers+="$cipher"
-            else
-                # resolve the openssl curve to the proper IANA name
-                current_curves="$(get_curve_name "$(echo $pfs|cut -d ',' -f2)")"
+    current_curves="None"
+    # if pfs uses ECDH, test supported curves
+    if [[ $pfs =~ ECDH ]]; then
+        has_curves="True"
+        if [[ $TEST_CURVES == "True" ]]; then
+            test_curves
+            if [[ -n $ecc_ciphers ]]; then
+                ecc_ciphers+=":"
             fi
+            ecc_ciphers+="$cipher"
+        else
+            # resolve the openssl curve to the proper IANA name
+            current_curves="$(get_curve_name "$(echo $pfs|cut -d ',' -f2)")"
         fi
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
-        verbose "handshake succeeded, server returned ciphersuite '$result'"
-        return 0
     fi
+    result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
+    verbose "handshake succeeded, server returned ciphersuite '$result'"
+    return 0
 }
 
 # Calculate the average handshake time for a specific ciphersuite
