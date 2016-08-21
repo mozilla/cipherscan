@@ -487,17 +487,67 @@ parse_openssl_output() {
     fi
 }
 
+flatten_or_join_array_by_char() {
+    # Two or less parameters (join + 0 or 1 value), then no need to join; return the string.
+    if (( $# <= 2 )); then
+        joined_array="$2"
+        return
+    fi
+    # Discard the join string (usually ':', could be others).
+    local join_by="$1"
+    shift
+
+    local found_many=''
+    local last_value=''
+    for each_value in "$@"; do
+        if [[ -z $last_value ]]; then
+            # This is the first one, so store it.
+            last_value="$each_value"
+            continue
+        fi
+        if [[ $last_value != "$each_value" ]]; then
+            # This one is different, so we found many. Stop checking.
+            found_many=1
+            break
+        fi
+    done
+
+    if [[ -z $found_many ]]; then
+        # We only found one, so emit that.
+        joined_array="$1"
+        return
+    else
+        # We found many, so join them by whatever.
+        join_array_by_char "$join_by" "$@"
+        # joined_array is now set. All done.
+        return
+    fi
+}
+
+TLS_VERSIONS_TO_TEST=(
+    '-ssl2'
+    '-ssl3'
+    '-tls1'
+    '-tls1_1'
+    '-tls1_2'
+)
+
 # Connect to a target host with the selected ciphersuite
 test_cipher_on_target() {
     local sslcommand="$*"
     cipher=""
     local cmnd=""
-    protocols=""
-    pfs=""
+    protocols=()
+    versions=()
     previous_cipher=""
     certificates=""
-    for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
-    do
+    declare -A sigalgs=()
+    declare -A pfses=()
+    declare -A tickethints=()
+    declare -A ocspstaples=()
+    declare -A trusteds=()
+    declare -A pubkeys=()
+    for tls_version in "${TLS_VERSIONS_TO_TEST[@]}"; do
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
         # -status exception is ignored in SSLv2, go figure
@@ -602,24 +652,20 @@ test_cipher_on_target() {
         fi
         # handling of TLSv1.2 only cipher suites
         if [[ ! -z "$previous_cipher" ]] && [[ "$previous_cipher" != "$current_cipher" ]] && [[ "$current_cipher" != "0000" ]]; then
-            unset protocols
+            protocols=()
         fi
         previous_cipher=$current_cipher
 
         # connection succeeded, add TLS version to positive results
-        if [[ -z "$protocols" ]]; then
-            protocols=$current_protocol
-        else
-            protocols="$protocols,$current_protocol"
-        fi
+        protocols+=("$current_protocol")
         cipher=$current_cipher
-        pfs=$current_pfs
-        [[ -z $pfs ]] && pfs="None"
-        pubkey=$current_pubkey
-        sigalg=$current_sigalg
-        trusted=$current_trusted
-        tickethint=$current_tickethint
-        ocspstaple=$current_ocspstaple
+        [[ -z $current_pfs ]] && current_pfs="None"
+        pfses[$current_protocol]="$current_pfs"
+        pubkeys[$current_protocol]="$current_pubkey"
+        sigalgs[$current_protocol]="$current_sigalg"
+        trusteds[$current_protocol]=$current_trusted
+        tickethints[$current_protocol]=$current_tickethint
+        ocspstaples[$current_protocol]=$current_ocspstaple
         certificates="$current_certificates"
         # grab the cipher and PFS key size
     done
@@ -629,34 +675,146 @@ test_cipher_on_target() {
         verbose "handshake failed, no ciphersuite was returned"
         result='ConnectionFailure'
         return 2
+    fi
+
+    # Flatten the sigalgs list to a single item if every entry is the same.
+    if (( ${#sigalgs[*]} > 1 )); then
+        local sigalgs_values=()
+        for each_protocol in "${protocols[@]}"; do
+            sigalgs_values+=("${sigalgs[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ',' "${sigalgs_values[@]}"
+        else
+            flatten_or_join_array_by_char ',' "${sigalgs_values[@]}"
+        fi
+        sigalg="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        sigalg="${sigalgs[@]}"
+    fi
+
+    # Flatten the pfses list to a single item if every entry is the same.
+    if (( ${#pfses[*]} > 1 )); then
+        local pfses_values=()
+        for each_protocol in "${protocols[@]}"; do
+            pfses_values+=("${pfses[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ';' "${pfses_values[@]}"
+        else
+            flatten_or_join_array_by_char ';' "${pfses_values[@]}"
+        fi
+        pfs="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        pfs="${pfses[@]}"
+    fi
+
+    # Flatten the tickethints list to a single item if every entry is the same.
+    if (( ${#tickethints[*]} > 1 )); then
+        local tickethints_values=()
+        for each_protocol in "${protocols[@]}"; do
+            tickethints_values+=("${tickethints[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ',' "${tickethints_values[@]}"
+        else
+            flatten_or_join_array_by_char ',' "${tickethints_values[@]}"
+        fi
+        tickethint="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        tickethint="${tickethints[@]}"
+    fi
+
+    # Flatten the ocspstaples list to a single item if every entry is the same.
+    if (( ${#ocspstaples[*]} > 1 )); then
+        local ocspstaples_values=()
+        for each_protocol in "${protocols[@]}"; do
+            ocspstaples_values+=("${ocspstaples[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ',' "${ocspstaples_values[@]}"
+        else
+            flatten_or_join_array_by_char ',' "${ocspstaples_values[@]}"
+        fi
+        ocspstaple="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        ocspstaple="${ocspstaples[@]}"
+    fi
+
+    # Flatten the trusteds list to a single item if every entry is the same.
+    if (( ${#trusteds[*]} > 1 )); then
+        local trusteds_values=()
+        for each_protocol in "${protocols[@]}"; do
+            trusteds_values+=("${trusteds[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ',' "${trusteds_values[@]}"
+        else
+            flatten_or_join_array_by_char ',' "${trusteds_values[@]}"
+        fi
+        trusted="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        trusted="${trusteds[@]}"
+    fi
+
+    # Flatten the pubkeys list to a single item if every entry is the same.
+    if (( ${#pubkeys[*]} > 1 )); then
+        local pubkeys_values=()
+        for each_protocol in "${protocols[@]}"; do
+            pubkeys_values+=("${pubkeys[$each_protocol]}")
+        done
+        if [[ $OUTPUTFORMAT == 'json' ]]; then
+            # Don't deduplicate for JSON.
+            join_array_by_char ',' "${pubkeys_values[@]}"
+        else
+            flatten_or_join_array_by_char ',' "${pubkeys_values[@]}"
+        fi
+        pubkey="$joined_array"
+    else
+        # Just extract the one value that's present and use it.
+        pubkey="${pubkeys[@]}"
+    fi
+
+    # Pre-join this, since we use it in a couple of places below.
+    join_array_by_char ',' "${protocols[@]}"
+    protocols_csv="$joined_array"
 
     # if cipher contains NONE, the cipher wasn't accepted
-    elif [[ "$cipher" == '(NONE)  ' ]]; then
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
+    if [[ "$cipher" == '(NONE)  ' ]]; then
+        result="$cipher $protocols_csv $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
+    fi
 
     # the connection succeeded
-    else
-        current_curves="None"
-        # if pfs uses ECDH, test supported curves
-        if [[ $pfs =~ ECDH ]]; then
-            has_curves="True"
-            if [[ $TEST_CURVES == "True" ]]; then
-                test_curves
-                if [[ -n $ecc_ciphers ]]; then
-                    ecc_ciphers+=":"
-                fi
-                ecc_ciphers+="$cipher"
-            else
-                # resolve the openssl curve to the proper IANA name
-                current_curves="$(get_curve_name "$(echo $pfs|cut -d ',' -f2)")"
+    current_curves="None"
+    # if pfs uses ECDH, test supported curves
+    if [[ $pfs =~ ECDH ]]; then
+        has_curves="True"
+        if [[ $TEST_CURVES == "True" ]]; then
+            test_curves
+            if [[ -n $ecc_ciphers ]]; then
+                ecc_ciphers+=":"
             fi
+            ecc_ciphers+="$cipher"
+        else
+            # resolve the openssl curve to the proper IANA name
+            current_curves="$(get_curve_name "$(echo $pfs|cut -d ',' -f2)")"
         fi
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
-        verbose "handshake succeeded, server returned ciphersuite '$result'"
-        return 0
     fi
+    result="$cipher $protocols_csv $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
+    verbose "handshake succeeded, server returned ciphersuite '$result'"
+    return 0
 }
 
 # Calculate the average handshake time for a specific ciphersuite
@@ -978,15 +1136,13 @@ display_results_in_json() {
         echo -n "\"protocols\":[\"${cipher_arr[1]//,/\",\"}\"],"
         echo -n "\"pubkey\":[\"${cipher_arr[2]//,/\",\"}\"],"
         echo -n "\"sigalg\":[\"${cipher_arr[3]//,/\",\"}\"],"
-        echo -n "\"trusted\":\"${cipher_arr[4]//,/\",\"}\","
+        echo -n "\"trusted\":[\"${cipher_arr[4]//,/\",\"}\"],"
         if [[ -n $CAPATH ]]; then
             echo -n "\"certificates\":[${ciphercertificates[$ctr]}],"
         fi
-        echo -n "\"ticket_hint\":\"${cipher_arr[5]}\","
-        echo -n "\"ocsp_stapling\":\"${cipher_arr[6]}\","
-        pfs="${cipher_arr[7]}"
-        [[ -z $pfs ]] && pfs="None"
-        echo -n "\"pfs\":\"$pfs\""
+        echo -n "\"ticket_hint\":[\"${cipher_arr[5]//,/\",\"}\"],"
+        echo -n "\"ocsp_stapling\":[\"${cipher_arr[6]//,/\",\"}\"],"
+        echo -n "\"pfs\":[\"${cipher_arr[7]//\;/\",\"}\"]"
         if [[ "${cipher_arr[0]}" =~ ECDH ]]; then
             echo -n ","
             echo -n "\"curves\":[\"${cipher_arr[8]//,/\",\"}\"]"
