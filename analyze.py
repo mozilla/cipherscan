@@ -43,14 +43,21 @@ def has_good_pfs(pfs, target_dh, target_ecc, must_match=False):
 def is_fubar(results):
     logging.debug('entering fubar evaluation')
     lvl = 'fubar'
+    min_ec_size = min(old["ecdh_param_size"], inter["ecdh_param_size"], modern["ecdh_param_size"])
+
     fubar = False
     has_ssl2 = False
     has_wrong_pubkey = False
+    has_wrong_ec_pubkey = False
     has_bad_sig = False
     has_untrust_cert = False
     has_wrong_pfs = False
+
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
+        pubkey_bits = int(conn['pubkey'][0])
+        ec_kex = conn['cipher'].startswith('ECDHE-')
+
         if conn['cipher'] not in (set(old["ciphersuites"]) | set(inter["ciphersuites"]) | set(modern["ciphersuites"])):
             failures[lvl].append("remove cipher " + conn['cipher'])
             logging.debug(conn['cipher'] + ' is in the list of fubar ciphers')
@@ -59,9 +66,13 @@ def is_fubar(results):
             has_ssl2 = True
             logging.debug('SSLv2 is in the list of fubar protocols')
             fubar = True
-        if int(conn['pubkey'][0]) < 2048:
+        if not ec_kex and pubkey_bits < 2048:
             has_wrong_pubkey = True
             logging.debug(conn['pubkey'][0] + ' is a fubar pubkey size')
+            fubar = True
+        if ec_kex and pubkey_bits < min_ec_size:
+            has_wrong_ec_pubkey = True
+            logging.debug(conn['pubkey'][0] + ' is a fubar EC pubkey size')
             fubar = True
         if conn['pfs'] != 'None':
             if not has_good_pfs(conn['pfs'], 1024, 160):
@@ -82,6 +93,8 @@ def is_fubar(results):
         failures[lvl].append("don't use a cert with a bad signature algorithm")
     if has_wrong_pubkey:
         failures[lvl].append("don't use a public key smaller than 2048 bits")
+    if has_wrong_ec_pubkey:
+        failures[lvl].append("don't use an EC key smaller than " + str(min_ec_size))
     if has_untrust_cert:
         failures[lvl].append("don't use an untrusted or self-signed certificate")
     if has_wrong_pfs:
