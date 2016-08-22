@@ -7,7 +7,7 @@
 
 from __future__ import print_function
 
-import sys, os, json, subprocess, logging, argparse, platform, urllib2
+import sys, os, json, subprocess, logging, argparse, platform, urllib2, re
 from collections import namedtuple
 from datetime import datetime
 from copy import deepcopy
@@ -56,7 +56,7 @@ def is_fubar(results):
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
         pubkey_bits = int(conn['pubkey'][0])
-        ec_kex = conn['cipher'].startswith('ECDHE-')
+        ec_kex = re.match(r"(ECDHE|EECDH|ECDH)-", conn['cipher'])
 
         if conn['cipher'] not in (set(old["ciphersuites"]) | set(inter["ciphersuites"]) | set(modern["ciphersuites"])):
             failures[lvl].append("remove cipher " + conn['cipher'])
