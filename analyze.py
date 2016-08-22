@@ -43,7 +43,6 @@ def has_good_pfs(pfs, target_dh, target_ecc, must_match=False):
 def is_fubar(results):
     logging.debug('entering fubar evaluation')
     lvl = 'fubar'
-    min_ec_size = min(old["ecdh_param_size"], inter["ecdh_param_size"], modern["ecdh_param_size"])
 
     fubar = False
     has_ssl2 = False
@@ -70,7 +69,7 @@ def is_fubar(results):
             has_wrong_pubkey = True
             logging.debug(conn['pubkey'][0] + ' is a fubar pubkey size')
             fubar = True
-        if ec_kex and pubkey_bits < min_ec_size:
+        if ec_kex and pubkey_bits < 160:
             has_wrong_ec_pubkey = True
             logging.debug(conn['pubkey'][0] + ' is a fubar EC pubkey size')
             fubar = True
@@ -94,7 +93,7 @@ def is_fubar(results):
     if has_wrong_pubkey:
         failures[lvl].append("don't use a public key smaller than 2048 bits")
     if has_wrong_ec_pubkey:
-        failures[lvl].append("don't use an EC key smaller than " + str(min_ec_size))
+        failures[lvl].append("don't use an EC key smaller than 160 bits")
     if has_untrust_cert:
         failures[lvl].append("don't use an untrusted or self-signed certificate")
     if has_wrong_pfs:
