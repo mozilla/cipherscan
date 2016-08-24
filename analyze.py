@@ -69,7 +69,7 @@ def is_fubar(results):
             has_wrong_pubkey = True
             logging.debug(conn['pubkey'][0] + ' is a fubar pubkey size')
             fubar = True
-        if ec_kex and pubkey_bits < 160:
+        if ec_kex and pubkey_bits < 256:
             has_wrong_ec_pubkey = True
             logging.debug(conn['pubkey'][0] + ' is a fubar EC pubkey size')
             fubar = True
@@ -93,7 +93,7 @@ def is_fubar(results):
     if has_wrong_pubkey:
         failures[lvl].append("don't use a public key smaller than 2048 bits")
     if has_wrong_ec_pubkey:
-        failures[lvl].append("don't use an EC key smaller than 160 bits")
+        failures[lvl].append("don't use an EC key smaller than 256 bits")
     if has_untrust_cert:
         failures[lvl].append("don't use an untrusted or self-signed certificate")
     if has_wrong_pfs:
