@@ -377,6 +377,7 @@ parse_openssl_output() {
     current_sigalg="None"
     current_renegotiation="False"
     current_compression=""
+    current_npn="None"
 
     certs_found=0
     current_raw_certificates=()
@@ -396,6 +397,12 @@ parse_openssl_output() {
                     break
                 fi
             done
+            continue
+        fi
+
+        # get NPN protocols
+        if [[ $line =~ Protocols\ advertised\ by\ server:\ (.*) ]]; then
+            current_npn="${BASH_REMATCH[1]// /}"
             continue
         fi
 
@@ -620,6 +627,7 @@ test_cipher_on_target() {
         trusted=$current_trusted
         tickethint=$current_tickethint
         ocspstaple=$current_ocspstaple
+        npn="$current_npn"
         certificates="$current_certificates"
         # grab the cipher and PFS key size
     done
@@ -632,7 +640,7 @@ test_cipher_on_target() {
 
     # if cipher contains NONE, the cipher wasn't accepted
     elif [[ "$cipher" == '(NONE)  ' ]]; then
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
+        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $npn $pfs $current_curves $curves_ordering"
         verbose "handshake failed, server returned ciphersuite '$result'"
         return 1
 
@@ -653,7 +661,7 @@ test_cipher_on_target() {
                 current_curves="$(get_curve_name "$(echo $pfs|cut -d ',' -f2)")"
             fi
         fi
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $pfs $current_curves $curves_ordering"
+        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $npn $pfs $current_curves $curves_ordering"
         verbose "handshake succeeded, server returned ciphersuite '$result'"
         return 0
     fi
@@ -693,7 +701,7 @@ get_cipher_pref() {
         sslcommand+=" -CAfile $CACERTS"
     fi
     sslcommand+=" -trusted_first -status $SCLIENTARGS -connect $TARGET"
-    sslcommand+=" -cipher $ciphersuite"
+    sslcommand+=" -cipher $ciphersuite -nextprotoneg http/1.1"
 
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     # If the connection succeeded with the current cipher, benchmark and store
@@ -728,6 +736,7 @@ display_results_in_terminal() {
     local sigalg
     local trusted
     local tickethint
+    local npn
     local ocspstaple
     local curvesordering
     local different=False
@@ -771,8 +780,9 @@ display_results_in_terminal() {
             trusted="${cipher_data[4]}"
             tickethint="${cipher_data[5]}"
             ocspstaple="${cipher_data[6]}"
-            if [[ $TEST_CURVES == "True" && -n ${cipher_data[9]} ]]; then
-                curvesordering="${cipher_data[9]}"
+            npn="${cipher_data[7]}"
+            if [[ $TEST_CURVES == "True" && -n ${cipher_data[10]} ]]; then
+                curvesordering="${cipher_data[10]}"
             fi
         else
             if [[ "$pubkey" != "${cipher_data[2]}" ]]; then
@@ -790,10 +800,14 @@ display_results_in_terminal() {
             if [[ "$ocspstaple" != "${cipher_data[6]}" ]]; then
                 different=True
             fi
-            if [[ -z $curvesordering && -n "${cipher_data[9]}" ]]; then
-                curvesordering="${cipher_data[9]}"
+            if [[ "$npn" != "${cipher_data[7]}" ]]; then
+                different=True
             fi
-            if [[ -n $curvesordering && "$curvesordering" != "${cipher_data[9]}" ]]; then
+            if [[ -z $curvesordering && -n "${cipher_data[10]}" ]]; then
+                curvesordering="${cipher_data[10]}"
+            fi
+            if [[ -n $curvesordering && "$curvesordering" != "${cipher_data[10]}" ]]; then
+                echo "CURVESORDERING"
                 different=True
             fi
         fi
@@ -803,7 +817,7 @@ display_results_in_terminal() {
 
     header="prio ciphersuite protocols"
     if [[ $different == "True" ]]; then
-        header+=" pubkey_size signature_algoritm trusted ticket_hint ocsp_staple"
+        header+=" pubkey_size signature_algoritm trusted ticket_hint ocsp_staple npn"
     fi
     header+=" pfs"
     if [[ $has_curves == "True" ]]; then
@@ -825,7 +839,7 @@ display_results_in_terminal() {
             echo "$result"|grep -v '(NONE)'
         else
             # prints priority, ciphersuite, protocols and pfs
-            awk '!/(NONE)/{print $1 " " $2 " " $3 " " $9 " " $10}' <<<"$result"
+            awk '!/(NONE)/{print $1 " " $2 " " $3 " " $10 " " $11}' <<<"$result"
         fi
     done|column -t
     echo
@@ -848,6 +862,7 @@ display_results_in_terminal() {
     if [[ $different != "True" ]]; then
         echo -e "Certificate: $trusted, $pubkey bits, $sigalg signature"
         echo "TLS ticket lifetime hint: $tickethint"
+        echo "NPN protocols: $npn"
     fi
     if [[ $ocspstaple == "True" ]]; then
         echo -e "OCSP stapling: ${c_green}supported${c_reset}"
@@ -984,15 +999,16 @@ display_results_in_json() {
         fi
         echo -n "\"ticket_hint\":\"${cipher_arr[5]}\","
         echo -n "\"ocsp_stapling\":\"${cipher_arr[6]}\","
-        pfs="${cipher_arr[7]}"
+        echo -n "\"npn\":[\"${cipher_arr[7]//,/\",\"}\"],"
+        pfs="${cipher_arr[8]}"
         [[ -z $pfs ]] && pfs="None"
         echo -n "\"pfs\":\"$pfs\""
         if [[ "${cipher_arr[0]}" =~ ECDH ]]; then
             echo -n ","
-            echo -n "\"curves\":[\"${cipher_arr[8]//,/\",\"}\"]"
+            echo -n "\"curves\":[\"${cipher_arr[9]//,/\",\"}\"]"
             if [[ $TEST_CURVES == "True" ]]; then
                 echo -n ","
-                echo -n "\"curves_ordering\":\"${cipher_arr[9]}\""
+                echo -n "\"curves_ordering\":\"${cipher_arr[10]}\""
             fi
         fi
         echo -n "}"
