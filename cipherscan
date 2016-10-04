@@ -980,6 +980,8 @@ display_results_in_terminal() {
             done | sort
         fi
     fi
+
+    echo "$cscan_tests"
 }
 
 display_results_in_json() {
@@ -1080,7 +1082,12 @@ display_results_in_json() {
         echo -n "}"
         ctr=$((ctr+1))
     done
-    echo '}}'
+    echo -n '}'
+    if [[ -n $cscan_tests ]]; then
+        echo -n ',"intolerancies":'
+        echo -n "$cscan_tests"
+    fi
+    echo '}'
 }
 
 test_serverside_ordering() {
@@ -1550,6 +1557,24 @@ test_tls_tolerance() {
             tls_tolerance['small-SSLv3']="True $current_protocol $current_cipher $current_trusted"
         fi
     fi
+
+    # finally run the Python based test to perform more precise scan
+    options=()
+    options+=("$DIRNAMEPATH/cscan.sh")
+    if [[ "$OUTPUTFORMAT" == "json" ]]; then
+        options+=(-j)
+    else
+        if [[ $VERBOSE != 0 ]]; then
+            options+=("-v" "--no-header")
+        else
+            options+=("--no-header")
+        fi
+    fi
+    options+=("$TARGET")
+    if [[ -n $sni_target ]]; then
+        options+=("$sni_target")
+    fi
+    cscan_tests="$(${options[*]})"
 }
 
 test_kex_sigalgs() {
@@ -2101,6 +2126,11 @@ if [[ $VERBOSE != 0 ]] ; then
 fi
 
 SCLIENTARGS="${PARAMS[*]}"
+# we need the SNI for cscan, so save it if it was provided through
+# OpenSSL options
+if [[ $SCLIENTARGS =~ servername[\ ]*([^\ ]*)[\ ]* ]]; then
+    sni_target="${BASH_REMATCH[1]}"
+fi
 # only append the SNI:
 # if the target is a hostname by validating the tld
 # if -servername was not supplied by the user
@@ -2109,6 +2139,7 @@ if [[ $SNI == "True"  && ! $SCLIENTARGS =~ servername ]]; then
         SCLIENTARGS="$SCLIENTARGS -servername $sni_target"
     else
         echo "Warning: target is not a FQDN. SNI was disabled. Use a FQDN or '-servername <fqdn>'" 1>&2
+        sni_target=''
     fi
 fi
 debug "sclientargs: $SCLIENTARGS"
