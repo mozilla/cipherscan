@@ -250,6 +250,8 @@ Some useful OpenSSL options:
                     that require turning TLS after initial protocol specific
                     hello
 -servername name    Request SNI support for connections
+-proxy proxyhost:port Connect to the scan target via specified proxy
+                    (req. OpenSSL 1.0.x)
 -verify_hostname name Request host name verification in connection
                     (req. OpenSSL 1.0.2)
 -verify_ip ip       Request host name verification for an IP address, usually
@@ -258,6 +260,7 @@ Some useful OpenSSL options:
 EXAMPLES:
 $0 -starttls xmpp jabber.ccc.de:5222
 $0 -servername youtube.com youtube.com:443
+$0 -proxy myproxy.example.com:8080 youtube.com:443
 "
 }
 
@@ -843,7 +846,7 @@ display_results_in_terminal() {
         fi
     done|column -t
     echo
-    
+
     if [[ ($sigalg =~ RSA && $pubkey -ge 2047) || ($cipher =~ ECDSA && $pubkey -gt 255) ]]; then
         pubkey="${c_green}${pubkey}${c_reset}"
     else
