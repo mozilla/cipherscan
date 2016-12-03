@@ -251,7 +251,7 @@ Some useful OpenSSL options:
                     hello
 -servername name    Request SNI support for connections
 -proxy proxyhost:port Connect to the scan target via specified proxy
-                    (req. OpenSSL 1.0.x)
+                    (req. OpenSSL 1.1.0 or bundled OpenSSL)
 -verify_hostname name Request host name verification in connection
                     (req. OpenSSL 1.0.2)
 -verify_ip ip       Request host name verification for an IP address, usually
