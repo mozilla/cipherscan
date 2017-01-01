@@ -837,8 +837,8 @@ display_results_in_terminal() {
         if [[ $different == "True" ]]; then
             echo "$result"|grep -v '(NONE)'
         else
-            # prints priority, ciphersuite, protocols and pfs
-            awk '!/(NONE)/{print $1 " " $2 " " $3 " " $10 " " $11}' <<<"$result"
+            # prints priority, ciphersuite, protocols, pfs and benchmark time (if any)
+            awk '!/(NONE)/{print $1 " " $2 " " $3 " " $10 " " $11 " " $13 }' <<<"$result"
         fi
     done|column -t
     echo
