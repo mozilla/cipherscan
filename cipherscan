@@ -659,6 +659,7 @@ test_cipher_on_target() {
             else
                 # resolve the openssl curve to the proper IANA name
                 current_curves="$(get_curve_name "$(echo $pfs|cut -d ',' -f2)")"
+                curves_ordering="unknown"
             fi
         fi
         result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $npn $pfs $current_curves $curves_ordering"
@@ -783,6 +784,8 @@ display_results_in_terminal() {
             npn="${cipher_data[7]}"
             if [[ $TEST_CURVES == "True" && -n ${cipher_data[10]} ]]; then
                 curvesordering="${cipher_data[10]}"
+            else
+                curvesordering="unknown"
             fi
         else
             if [[ "$pubkey" != "${cipher_data[2]}" ]]; then
@@ -803,11 +806,7 @@ display_results_in_terminal() {
             if [[ "$npn" != "${cipher_data[7]}" ]]; then
                 different=True
             fi
-            if [[ -z $curvesordering && -n "${cipher_data[10]}" ]]; then
-                curvesordering="${cipher_data[10]}"
-            fi
-            if [[ -n $curvesordering && "$curvesordering" != "${cipher_data[10]}" ]]; then
-                echo "CURVESORDERING"
+            if [[ "$TEST_CURVES" == "True" && "$curvesordering" != "${cipher_data[10]}" ]]; then
                 different=True
             fi
         fi
