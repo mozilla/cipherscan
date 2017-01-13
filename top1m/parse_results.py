@@ -114,6 +114,8 @@ ecccurve = defaultdict(int)
 npn = defaultdict(int)
 ocspstaple = defaultdict(int)
 fallbacks = defaultdict(int)
+intolerancies = defaultdict(int)
+impl_families = defaultdict(int)
 # array with indexes of fallback names for the matrix report
 fallback_ids = defaultdict(int)
 i=0
@@ -177,6 +179,8 @@ for r,d,flist in os.walk(path):
         tempecccurve = {}
         tempnpn = {}
         tempfallbacks = {}
+        tempintolerancies = {}
+        tempimpl_families = {}
         """ supported ciphers by the server under scan """
         tempcipherstats = {}
         temppfssigalgordering = {}
@@ -350,6 +354,30 @@ for r,d,flist in os.walk(path):
                         tempfallbacks['Big handshake intolerance'] = 1
                 except KeyError:
                     pass
+
+            if 'intolerancies' in results:
+                intoler = results['intolerancies']
+                for name, val in intoler.items():
+                    if val is True:
+                        tempintolerancies[name] = 1
+                intol = [x.replace(' ', '_')
+                              for x in tempintolerancies.keys()]
+                all_above_tls_1_2 = ('TLS_1.3', 'TLS_1.4', 'SSL_3.254',
+                                     'SSL_4.0', 'SSL_4.3', 'SSL_255.255')
+                if all(i in intol for i in all_above_tls_1_2):
+                    for i in all_above_tls_1_2:
+                        intol.remove(i)
+                    intol.append('TLS_1.3+')
+                all_above_ssl_4_0 = ('SSL_4.3', 'SSL_4.0', 'SSL_255.255')
+                if all(i in intol for i in all_above_ssl_4_0):
+                    for i in all_above_ssl_4_0:
+                        intol.remove(i)
+                    intol.append("SSL_4.0+")
+                if intol:
+                    intol.sort(reverse=True)
+                    tempimpl_families[" ".join(intol)] = 1
+            else:
+                tempintolerancies['x:missing information'] = 1
 
             """ get some extra data about server """
             if 'renegotiation' in results:
@@ -581,6 +609,12 @@ for r,d,flist in os.walk(path):
 
         for s in tempfallbacks:
             fallbacks[s] += 1
+
+        for s in tempintolerancies:
+            intolerancies[s] += 1
+
+        for s in tempimpl_families:
+            impl_families[s] += 1
 
         for s in tempsigstats:
             sigalg[s] += 1
@@ -920,3 +954,15 @@ print("------------------------")
 fallback_ids_sorted=sorted(fallback_ids.items(), key=operator.itemgetter(1))
 for touple in fallback_ids_sorted:
     print(str(touple[1]+1).rjust(3) + "  " + str(touple[0]))
+
+print("\nClient Hello intolerance                 Count     Percent")
+print("----------------------------------------+---------+-------")
+for stat in natural_sort(intolerancies):
+    percent = round(intolerancies[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(40) + " " + str(intolerancies[stat]).ljust(10) + str(percent).ljust(4) + "\n")
+
+print("\nImplementation families                               Count       Percent")
+print("-----------------------------------------------------+-----------+-------")
+for stat in natural_sort(impl_families):
+    percent = round(impl_families[stat] / total * 100, 4)
+    sys.stdout.write(stat.ljust(50) + " " + str(impl_families[stat]).ljust(10) + str(percent).ljust(4) + "\n")
