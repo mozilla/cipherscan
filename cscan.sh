@@ -1,14 +1,15 @@
 #!/bin/bash
 pushd "$(dirname ${BASH_SOURCE[0]})" > /dev/null
 if [ ! -d ./tlslite ]; then
-    echo -e "\n${BASH_SOURCE[0]}: tlslite-ng not found, downloading..."
-    git clone --depth=1 https://github.com/tomato42/tlslite-ng.git .tlslite-ng
+    git clone --depth=1 https://github.com/tomato42/tlslite-ng.git .tlslite-ng --quiet
     ln -s .tlslite-ng/tlslite tlslite
+    echo -e "\n${BASH_SOURCE[0]}: tlslite-ng not found, downloaded."
+
 fi
 if [ ! -d ./ecdsa ]; then
-    echo -e "\n${BASH_SOURCE[0]}: python-ecdsa not found, downloading..."
-    git clone --depth=1 https://github.com/warner/python-ecdsa.git .python-ecdsa
+    git clone --depth=1 https://github.com/warner/python-ecdsa.git .python-ecdsa --quiet
     ln -s .python-ecdsa/src/ecdsa ecdsa
+    echo "${BASH_SOURCE[0]}: python-ecdsa not found, downloaded."
 fi
 
 # update the code if it is running in interactive terminal
