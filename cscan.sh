@@ -9,7 +9,7 @@ fi
 if [ ! -d ./ecdsa ]; then
     git clone --depth=1 https://github.com/warner/python-ecdsa.git .python-ecdsa --quiet
     ln -s .python-ecdsa/src/ecdsa ecdsa
-    echo "${BASH_SOURCE[0]}: python-ecdsa not found, downloaded."
+    echo -e "${BASH_SOURCE[0]}: python-ecdsa not found, downloaded.\n"
 fi
 
 # update the code if it is running in interactive terminal
