@@ -419,9 +419,11 @@ parse_openssl_output() {
         # renegotiation support
         if [[ $line =~ Secure\ Renegotiation\ IS\ supported ]]; then
             current_renegotiation="secure"
+	    continue
         fi
         if [[ $line =~ Secure\ Renegotiation\ IS\ NOT\ supported ]]; then
             current_renegotiation="insecure"
+	    continue
         fi
 
         # compression settings
