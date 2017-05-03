@@ -429,6 +429,7 @@ parse_openssl_output() {
         # compression settings
         if [[ $line =~ Compression:\ (.*) ]]; then
             current_compression="${BASH_REMATCH[1]}"
+	    continue
         fi
 
         # extract the signing algorithm used in TLSv1.2 ephemeral kex
