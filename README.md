@@ -175,7 +175,7 @@ wants to reach the modern level, the items that failed under the modern tests
 should be corrected.
 
 `analyze.py` does not make any assumption on what a good level should be. Sites
-operators should now what level they want to match against, based on the
+operators should know what level they want to match against, based on the
 compatibility level they want to support. Again, refer to
 https://wiki.mozilla.org/Security/Server_Side_TLS for more information.
 
