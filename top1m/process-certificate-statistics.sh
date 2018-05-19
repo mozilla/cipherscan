@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [ ! -d ./ca_files ]; then
     echo "Directory with collected CA certificates missing!" >&2

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 pushd "$(dirname ${BASH_SOURCE[0]})" > /dev/null
 if [ ! -d ./tlslite ]; then
     echo -e "\n${BASH_SOURCE[0]}: tlslite-ng not found, downloading..." 1>&2
