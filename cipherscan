@@ -37,7 +37,7 @@ else
                 echo "greadlink not found. (try: brew install coreutils)" 1>&2
                 exit 1
             fi
-            TIMEOUTBIN=$(which gtimeout 2>/dev/null)
+            TIMEOUTBIN="$(which gtimeout 2>/dev/null)"
             if [[ -z $TIMEOUTBIN ]]; then
                 echo "gtimeout not found. (try: brew install coreutils)" 1>&2
                 exit 1
@@ -71,7 +71,7 @@ else
             # Check for busybox, which has different arguments
             TIMEOUTOUTPUT="$($TIMEOUTBIN --help 2>&1)"
             if [[ "$TIMEOUTOUTPUT" =~ BusyBox ]]; then
-                TIMEOUTBIN="$TIMEOUTBIN -t"
+                TIMEOUTBIN=("$TIMEOUTBIN" "-t")
             fi
 
             ;;
@@ -343,7 +343,7 @@ get_curve_name() {
 }
 
 c_hash() {
-    local h=$(${OPENSSLBIN} x509 -hash -noout -in "$1/$2" 2>/dev/null)
+    local h=$("${OPENSSLBIN}" x509 -hash -noout -in "$1/$2" 2>/dev/null)
     for ((num=0; num<=100; num++)) ; do
         if [[ $1/${h}.${num} -ef $2 ]]; then
             # file already linked, ignore
@@ -490,7 +490,7 @@ parse_openssl_output() {
     # if we found any certs in output, process the first one and extract
     # the signature algorithm on it (it's the server's certificate)
     if (( certs_found > 0 )); then
-        local ossl_out=$(${OPENSSLBIN} x509 -noout -text 2>/dev/null <<<"${current_raw_certificates[0]}")
+        local ossl_out=$("${OPENSSLBIN}" x509 -noout -text 2>/dev/null <<<"${current_raw_certificates[0]}")
         local regex='Signature Algorithm[^ ]+ +(.+$)'
         while read data; do
             if [[ $data =~ $regex ]]; then
@@ -502,30 +502,31 @@ parse_openssl_output() {
 
 # Connect to a target host with the selected ciphersuite
 test_cipher_on_target() {
-    local sslcommand="$*"
+    local sslcommand=("$@")
     cipher=""
-    local cmnd=""
+    local cmnd
     protocols=""
     pfs=""
     previous_cipher=""
     certificates=""
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
+        cmnd=("${sslcommand[@]}")
         # sslv2 client hello doesn't support SNI extension
         # in SSLv3 mode OpenSSL just ignores the setting so it's ok
         # -status exception is ignored in SSLv2, go figure
         if [[ "$tls_version" == "-ssl2" ]]; then
-            if [[ "$sslcommand" =~ (.*)(-servername\ [^ ]*)(.*) ]]; then
-                cmnd="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
-            else
-                cmnd="$sslcommand"
-            fi
-        else
-            cmnd=$sslcommand
+            for i in "${!cmnd[@]}"; do
+                if [[ ${cmnd[i]} = -servername ]]; then
+                    # remove option and its parameter
+                    unset 'cmnd[i]'
+                    unset 'cmnd[i+1]'
+                fi
+            done
         fi
         ratelimit
-        debug echo \"Q\" \| $cmnd $tls_version
-        local tmp=$(echo "Q" | $cmnd $tls_version 1>/dev/stdout 2>/dev/null)
+        debug echo \"Q\" \| "${cmnd[@]}" $tls_version
+        local tmp=$(echo "Q" | "${cmnd[@]}" $tls_version 1>/dev/stdout 2>/dev/null)
 
         parse_openssl_output <<<"$tmp"
         verbose "selected cipher is '$current_cipher'"
@@ -553,13 +554,13 @@ test_cipher_on_target() {
             fi
 
             # compute sha256 fingerprint of the certificate
-            local sha256sum=($(${OPENSSLBIN} x509 -outform DER\
+            local sha256sum=($("${OPENSSLBIN}" x509 -outform DER\
                 <<<"$cert" 2>/dev/null |\
-                ${OPENSSLBIN} dgst -sha256 -r 2>/dev/null))
+                "${OPENSSLBIN}" dgst -sha256 -r 2>/dev/null))
 
             # check if it is a CA certificate
             local isCA="False"
-            if ${OPENSSLBIN} x509 -noout -text <<<"$cert" 2>/dev/null |\
+            if "${OPENSSLBIN}" x509 -noout -text <<<"$cert" 2>/dev/null |\
                 grep 'CA:TRUE' >/dev/null; then
                 isCA="True"
             fi
@@ -576,7 +577,7 @@ test_cipher_on_target() {
             # unrelated certificates that are not trusted (including self
             # signed ones)
             local saved="False"
-            if ${OPENSSLBIN} verify "${trust_source[@]}" \
+            if "${OPENSSLBIN}" verify "${trust_source[@]}" \
                 -untrusted <(printf "%s" "${current_raw_certificates[@]}") \
                 <(echo "$cert") 2>/dev/null | \
                 grep ': OK$' >/dev/null; then
@@ -677,13 +678,15 @@ test_cipher_on_target() {
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
     local ciphersuite="$1"
-    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS"
-    sslcommand+=" -connect $TARGET -cipher $ciphersuite"
+    local sslcommand
+    sslcommand+=("${TIMEOUTBIN[@]}" "$TIMEOUT")
+    sslcommand+=("$OPENSSLBIN" "s_client" "${SCLIENTARGS[@]}")
+    sslcommand+=("-connect" "$TARGET" "-cipher" "$ciphersuite")
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
         debug "Connection $i"
-        (echo "Q" | $sslcommand 2>/dev/null 1>/dev/null)
+        (echo "Q" | "${sslcommand[@]}" 2>/dev/null 1>/dev/null)
         if (( $? != 0 )); then
             break
         fi
@@ -701,18 +704,19 @@ get_cipher_pref() {
     [[ "$OUTPUTFORMAT" == "terminal" ]] && [[ $DEBUG -lt 1 ]] && echo -n '.'
     local ciphersuite="$1"
 
-    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+    local sslcommand
+    sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
     if [[ -n "$CAPATH" ]]; then
-        sslcommand+=" -CApath $CAPATH -showcerts"
+        sslcommand+=("-CApath" "$CAPATH" "-showcerts")
     elif [[ -e $CACERTS ]]; then
-        sslcommand+=" -CAfile $CACERTS"
+        sslcommand+=("-CAfile" "$CACERTS")
     fi
-    sslcommand+=" -trusted_first -status $SCLIENTARGS -connect $TARGET"
-    sslcommand+=" -cipher $ciphersuite -nextprotoneg http/1.1"
+    sslcommand+=("-trusted_first" "-status" "${SCLIENTARGS[@]}" "-connect" "$TARGET")
+    sslcommand+=("-cipher" "$ciphersuite" "-nextprotoneg" "http/1.1")
 
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     # If the connection succeeded with the current cipher, benchmark and store
-    if test_cipher_on_target "$sslcommand"; then
+    if test_cipher_on_target "${sslcommand[@]}"; then
         cipherspref=("${cipherspref[@]}" "$result")
         ciphercertificates=("${ciphercertificates[@]}" "$certificates")
         pciph=($result)
@@ -1120,16 +1124,17 @@ test_serverside_ordering() {
     join_array_by_char ':' "${ciphersuites[@]}"
     ciphersuite="$joined_array"
 
-    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+    local sslcommand
+    sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
     if [[ -n "$CAPATH" ]]; then
-        sslcommand+=" -CApath $CAPATH -showcerts"
+        sslcommand+=("-CApath" "$CAPATH" "-showcerts")
     elif [[ -e "$CACERTS" ]]; then
-        sslcommand+=" -CAfile $CACERTS"
+        sslcommand+=("-CAfile" "$CACERTS")
     fi
-    sslcommand+=" -trusted_first -status $SCLIENTARGS -connect $TARGET"
-    sslcommand+=" -cipher $ciphersuite"
+    sslcommand+=("-trusted_first" "-status" "${SCLIENTARGS[@]}" "-connect" "$TARGET")
+    sslcommand+=("-cipher" "$ciphersuite")
 
-    test_cipher_on_target "$sslcommand"
+    test_cipher_on_target "${sslcommand[@]}"
     if (( $? != 0 )); then
         serverside="True"
     else
@@ -1154,18 +1159,18 @@ test_curves() {
     verbose "Will test following curves: $joined_array"
 
     # prepare the ssl command we'll be using
-    local sslcommand=""
-    sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+    local sslcommand
+    sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
     if [[ -n "$CAPATH" ]]; then
-        sslcommand+=" -CApath $CAPATH -showcerts"
+        sslcommand+=("-CApath" "$CAPATH" "-showcerts")
     elif [[ -e "$CACERTS" ]]; then
-        sslcommand+=" -CAfile $CACERTS"
+        sslcommand+=("-CAfile" "$CACERTS")
     fi
-    sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $current_cipher"
-    sslcommand+=" -trusted_first"
+    sslcommand+=("-status" "${SCLIENTARGS[@]}" "-connect" "$TARGET" "-cipher" "$current_cipher")
+    sslcommand+=("-trusted_first")
     # force the TLS to send a TLS1.0 client hello at least, as with SSLv2
     # ciphers present it will try to send a SSLv2 compatible client hello
-    sslcommand+=" -no_ssl2 -no_ssl3"
+    sslcommand+=("-no_ssl2" "-no_ssl3")
 
     #
     # here we use the same logic as with detecting cipher suites: first
@@ -1176,10 +1181,10 @@ test_curves() {
     while (( ${#curves[@]} > 0 )); do
         join_array_by_char ':' "${curves[@]}"
         local test_curves="$joined_array"
-        verbose "Testing $test_curves with command $sslcommand"
+        verbose "Testing $test_curves with command ${sslcommand[*]}"
 
         ratelimit
-        local tmp=$(echo Q | $sslcommand -curves "$test_curves" 2>/dev/null)
+        local tmp=$(echo Q | "${sslcommand[@]}" -curves "$test_curves" 2>/dev/null)
         parse_openssl_output <<<"$tmp"
 
         if [[ -z $current_protocol || $current_cipher == "(NONE)" || $current_cipher == '0000' ]]; then
@@ -1233,9 +1238,9 @@ test_curves() {
         done
         test_curves+="${tmp_curves[0]}"
 
-        verbose "Testing ordering with $sslcommand -curves $test_curves"
+        verbose "Testing ordering with ${sslcommand[*]} -curves $test_curves"
         ratelimit
-        local tmp=$(echo Q | $sslcommand -curves "$test_curves" 2>/dev/null)
+        local tmp=$(echo Q | "${sslcommand[@]}" -curves "$test_curves" 2>/dev/null)
         parse_openssl_output <<<"$tmp"
 
         if [[ -z $current_protocol || $current_cipher == "(NONE)" || $current_cipher == '0000' ]]; then
@@ -1275,17 +1280,17 @@ test_curves_fallback() {
 
     # prepare the ssl command we'll be using
     local sslcommand=""
-    sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+    sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
     if [[ -n "$CAPATH" ]]; then
-        sslcommand+=" -CApath $CAPATH -showcerts"
+        sslcommand+=("-CApath" "$CAPATH" "-showcerts")
     elif [[ -e "$CACERTS" ]]; then
-        sslcommand+=" -CAfile $CACERTS"
+        sslcommand+=("-CAfile" "$CACERTS")
     fi
-    sslcommand+=" -trusted_first"
-    sslcommand+=" -status $SCLIENTARGS -connect $TARGET -cipher $ecc_ciphers"
+    sslcommand+=("-trusted_first")
+    sslcommand+=("-status" "${SCLIENTARGS[@]}" "-connect" "$TARGET" "-cipher" "$ecc_ciphers")
     # force the TLS to send a TLS1.0 client hello at least, as with SSLv2
     # ciphers present it will try to send a SSLv2 compatible client hello
-    sslcommand+=" -no_ssl2 -no_ssl3"
+    sslcommand+=("-no_ssl2" "-no_ssl3")
 
     #
     # here we use the same logic as with detecting cipher suites: first
@@ -1297,10 +1302,10 @@ test_curves_fallback() {
     while (( ${#curves[@]} > 0 )); do
         join_array_by_char ':' "${curves[@]}"
         local test_curves="$joined_array"
-        verbose "Testing $sslcommand -curves $test_curves"
+        verbose "Testing ${sslcommand[*]} -curves $test_curves"
 
         ratelimit
-        local tmp=$(echo Q | $sslcommand -curves "$test_curves" 2>/dev/null)
+        local tmp=$(echo Q | "${sslcommand[@]}" -curves "$test_curves" 2>/dev/null)
         parse_openssl_output <<<"$tmp"
 
         if [[ -z $current_protocol || $current_cipher == "(NONE)" || $current_cipher == '0000' ]]; then
@@ -1343,19 +1348,20 @@ test_tls_tolerance() {
     tls_vers_tests['big-TLSv1.0']="-no_tls1_2 -no_tls1_1"
     tls_vers_tests['big-SSLv3']="-no_tls1_2 -no_tls1_1 -no_tls1"
 
-    local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+    local sslcommand
+    sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
     if [ -n "$CAPATH" ]; then
-        sslcommand+=" -CApath $CAPATH -showcerts"
+        sslcommand+=("-CApath" "$CAPATH" "-showcerts")
     elif [ -e "$CACERTS" ]; then
-        sslcommand+=" -CAfile $CACERTS"
+        sslcommand+=("-CAfile" "$CACERTS")
     fi
-    sslcommand+=" -trusted_first -status -nextprotoneg 'http/1.1'"
-    sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $CIPHERSUITE"
+    sslcommand+=("-trusted_first" "-status" "-nextprotoneg" "http/1.1")
+    sslcommand+=("${SCLIENTARGS[@]}" "-connect" "$TARGET" "-cipher" "$CIPHERSUITE")
 
     for version in "${!tls_vers_tests[@]}"; do
         ratelimit
-        verbose "Testing fallback with $sslcommand ${tls_vers_tests[$version]}"
-        local tmp=$(echo Q | $sslcommand ${tls_vers_tests[$version]} 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} ${tls_vers_tests[$version]}"
+        local tmp=$(echo Q | "${sslcommand[@]}" ${tls_vers_tests[$version]} 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1383,17 +1389,18 @@ test_tls_tolerance() {
         # (openssl automatically does that when there are SSLv2 ciphers in
         # cipher string and no options are specified)
         #
-        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        local sslcommand
+        sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
         if [[ -n "$CAPATH" ]]; then
-            sslcommand+=" -CApath $CAPATH -showcerts"
+            sslcommand+=("-CApath" "$CAPATH" "-showcerts")
         elif [[ -e "$CACERTS" ]]; then
-            sslcommand+=" -CAfile $CACERTS"
+            sslcommand+=("-CAfile" "$CACERTS")
         fi
-        sslcommand+=" -trusted_first -connect $TARGET -cipher $CIPHERSUITE"
+        sslcommand+=("-trusted_first" "-connect" "$TARGET" "-cipher" "$CIPHERSUITE")
 
         ratelimit
-        verbose "Testing fallback with $sslcommand"
-        local tmp=$(echo Q | $sslcommand 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]}"
+        local tmp=$(echo Q | "${sslcommand[@]}" 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1408,17 +1415,17 @@ test_tls_tolerance() {
         #
         local ciphers="$SHORTCIPHERSUITESTRING"
 
-        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        local sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
         if [[ -n "$CAPATH" ]]; then
-            sslcommand+=" -CApath $CAPATH -showcerts"
+            sslcommand+=("-CApath" "$CAPATH" "-showcerts")
         elif [[ -e "$CACERTS" ]]; then
-            sslcommand+=" -CAfile $CACERTS"
+            sslcommand+=("-CAfile" "$CACERTS")
         fi
-        sslcommand+=" -trusted_first -connect $TARGET -cipher $ciphers"
+        sslcommand+=("-trusted_first" "-connect" "$TARGET" "-cipher" "$ciphers")
 
         ratelimit
-        verbose "Testing fallback with $sslcommand"
-        local tmp=$(echo Q | $sslcommand 2>/dev/null)
+        verbose "Testing fallback with ${slcommand[*]}"
+        local tmp=$(echo Q | "${sslcommand[@]}" 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1432,8 +1439,8 @@ test_tls_tolerance() {
         # v2, small but with TLS1.1 as max version
         #
         ratelimit
-        verbose "Testing fallback with $sslcommand -no_tls1_2"
-        local tmp=$(echo Q | $sslcommand -no_tls1_2 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1447,8 +1454,8 @@ test_tls_tolerance() {
         # v2, small but with TLS1.0 as max version
         #
         ratelimit
-        verbose "Testing fallback with $sslcommand -no_tls1_2 -no_tls1_1"
-        local tmp=$(echo Q | $sslcommand -no_tls1_2 -no_tls1_1 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2 -no_tls1_1"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 -no_tls1_1 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1462,8 +1469,8 @@ test_tls_tolerance() {
         # v2, small but with SSLv3 as max version
         #
         ratelimit
-        verbose "Testing fallback with $sslcommand -no_tls1_2 -no_tls1_1 -no_tls1"
-        local tmp=$(echo Q | $sslcommand -no_tls1_2 -no_tls1_1 -no_tls1 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2 -no_tls1_1 -no_tls1"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 -no_tls1_1 -no_tls1 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1479,18 +1486,18 @@ test_tls_tolerance() {
         #
         local ciphers="$SHORTCIPHERSUITESTRING"
 
-        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        local sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
         if [[ -n "$CAPATH" ]]; then
-            sslcommand+=" -CApath $CAPATH -showcerts"
+            sslcommand+=("-CApath" "$CAPATH" "-showcerts")
         elif [[ -e "$CACERTS" ]]; then
-            sslcommand+=" -CAfile $CACERTS"
+            sslcommand+=("-CAfile" "$CACERTS")
         fi
-        sslcommand+=" -trusted_first"
-        sslcommand+=" $SCLIENTARGS -connect $TARGET -cipher $ciphers:!SSLv2"
+        sslcommand+=("-trusted_first")
+        sslcommand+=("${SCLIENTARGS[@]}" "-connect" "$TARGET" "-cipher" "$ciphers:!SSLv2")
 
         ratelimit
-        verbose "Testing fallback with $sslcommand"
-        local tmp=$(echo Q | $sslcommand 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]}"
+        local tmp=$(echo Q | "${sslcommand[@]}" 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1504,8 +1511,8 @@ test_tls_tolerance() {
         # v3 format TLSv1.1 hello, small cipher list
         #
         ratelimit
-        verbose "Testing fallback with $sslcommand -no_tls1_2"
-        local tmp=$(echo Q | $sslcommand -no_tls1_2 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1519,8 +1526,8 @@ test_tls_tolerance() {
         # v3 format TLSv1.0 hello, small cipher list
         #
         ratelimit
-        verbose "Testing fallback with $sslcommand -no_tls1_2 -no_tls1_1"
-        local tmp=$(echo Q | $sslcommand -no_tls1_2 -no_tls1_1 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2 -no_tls1_1"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 -no_tls1_1 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1535,8 +1542,8 @@ test_tls_tolerance() {
         #
         if check_option_support "-no_tlsext"; then
             ratelimit
-            verbose "Testing fallback with $sslcommand -no_tls1_2 -no_tls1_1 -no_tlsext"
-            local tmp=$(echo Q | $sslcommand -no_tls1_2 -no_tls1_1 -no_tlsext 2>/dev/null)
+            verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2 -no_tls1_1 -no_tlsext"
+            local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 -no_tls1_1 -no_tlsext 2>/dev/null)
             parse_openssl_output <<<"$tmp"
             verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
             if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1551,8 +1558,8 @@ test_tls_tolerance() {
         # v3 format SSLv3 hello, small cipher list
         #
         ratelimit
-        verbose "Testing fallback with $sslcommand -no_tls1_2 -no_tls1_1 -no_tls1"
-        local tmp=$(echo Q | $sslcommand -no_tls1_2 -no_tls1_1 -no_tls1 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2 -no_tls1_1 -no_tls1"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 -no_tls1_1 -no_tls1 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1633,18 +1640,18 @@ test_kex_sigalgs() {
     # Test default sigalgs for aECDSA ciphers
     #
     if [[ $supported_ecdsa_ciphers ]]; then
-        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        local sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
         if [ -n "$CAPATH" ]; then
-            sslcommand+=" -CApath $CAPATH -showcerts"
+            sslcommand+=("-CApath" "$CAPATH" "-showcerts")
         elif [ -e "$CACERTS" ]; then
-            sslcommand+=" -CAfile $CACERTS"
+            sslcommand+=("-CAfile" "$CACERTS")
         fi
-        sslcommand+=" -trusted_first $SCLIENTARGS -connect $TARGET"
-        sslcommand+=" -cipher $supported_ecdsa_ciphers"
+        sslcommand+=("-trusted_first" "${SCLIENTARGS[@]}" "-connect" "$TARGET")
+        sslcommand+=("-cipher" "$supported_ecdsa_ciphers")
         # since some ciphers supported by server may be SSLv2 only, we need to
         # force use of TLSv1.2, otherwise openssl will send a SSLv2 compatible
         # client hello
-        sslcommand+=" -no_ssl2 -no_ssl3"
+        sslcommand+=("-no_ssl2" "-no_ssl3")
         local test_ecdsa_sigalgs=("${ecdsa_sigalgs[@]}")
         local test_rsa_sigalgs=("${rsa_sigalgs[@]}")
 
@@ -1654,8 +1661,8 @@ test_kex_sigalgs() {
             local test_sigalgs="$joined_array"
 
             ratelimit
-            verbose "Testing default ECDSA sig algs with $sslcommand -sigalgs $test_sigalgs"
-            local tmp=$(echo Q | $sslcommand -sigalgs $test_sigalgs 2>/dev/null)
+            verbose "Testing default ECDSA sig algs with ${sslcommand[*]} -sigalgs $test_sigalgs"
+            local tmp=$(echo Q | "${sslcommand[@]}" -sigalgs $test_sigalgs 2>/dev/null)
             parse_openssl_output <<<"$tmp"
             verbose "server selected $current_cipher, $current_protocol, $current_kex_sigalg"
             if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1714,18 +1721,18 @@ test_kex_sigalgs() {
     # Test default sigalgs for aRSA ciphers
     #
     if [[ ${supported_rsa_ciphers} ]]; then
-        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        local sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
         if [ -n "$CAPATH" ]; then
-            sslcommand+=" -CApath $CAPATH -showcerts"
+            sslcommand+=("-CApath" "$CAPATH" "-showcerts")
         elif [ -e "$CACERTS" ]; then
-            sslcommand+=" -CAfile $CACERTS"
+            sslcommand+=("-CAfile" "$CACERTS")
         fi
-        sslcommand+=" -trusted_first $SCLIENTARGS -connect $TARGET"
-        sslcommand+=" -cipher $supported_rsa_ciphers"
+        sslcommand+=("-trusted_first" "${SCLIENTARGS[@]}" "-connect" "$TARGET")
+        sslcommand+=("-cipher" "$supported_rsa_ciphers")
         # since some ciphers supported by server may be SSLv2 only, we need to
         # force use of TLSv1.2, otherwise openssl will send a SSLv2 compatible
         # client hello
-        sslcommand+=" -no_ssl2 -no_ssl3"
+        sslcommand+=("-no_ssl2" "-no_ssl3")
         local test_ecdsa_sigalgs=("${ecdsa_sigalgs[@]}")
         local test_rsa_sigalgs=("${rsa_sigalgs[@]}")
 
@@ -1735,8 +1742,8 @@ test_kex_sigalgs() {
             local test_sigalgs="$joined_array"
 
             ratelimit
-            verbose "Testing default RSA sig algs with $sslcommand -sigalgs $test_sigalgs"
-            local tmp=$(echo Q | $sslcommand -sigalgs $test_sigalgs 2>/dev/null)
+            verbose "Testing default RSA sig algs with ${sslcommand[*]} -sigalgs $test_sigalgs"
+            local tmp=$(echo Q | "${sslcommand[@]}" -sigalgs $test_sigalgs 2>/dev/null)
             parse_openssl_output <<<"$tmp"
             verbose "server selected $current_cipher, $current_protocol, $current_kex_sigalg"
             if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1815,22 +1822,22 @@ test_kex_sigalgs() {
         test_sigalgs+="ECDSA+${sigalgs_preferred_ecdsa[0]}"
 
         # prepare the command to run
-        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        local sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
         if [ -n "$CAPATH" ]; then
-            sslcommand+=" -CApath $CAPATH -showcerts"
+            sslcommand+=("-CApath" "$CAPATH" "-showcerts")
         elif [ -e "$CACERTS" ]; then
-            sslcommand+=" -CAfile $CACERTS"
+            sslcommand+=("-CAfile" "$CACERTS")
         fi
-        sslcommand+=" -trusted_first $SCLIENTARGS -connect $TARGET"
-        sslcommand+=" -cipher $supported_ecdsa_ciphers"
+        sslcommand+=("-trusted_first" "${SCLIENTARGS[@]}" "-connect" "$TARGET")
+        sslcommand+=("-cipher" "$supported_ecdsa_ciphers")
         # since some ciphers supported by server may be SSLv2 only, we need to
         # force use of TLSv1.2, otherwise openssl will send a SSLv2 compatible
         # client hello
-        sslcommand+=" -no_ssl2 -no_ssl3"
+        sslcommand+=("-no_ssl2" "-no_ssl3")
 
         ratelimit
-        verbose "Test ordering of sigalgs with $sslcommand -sigalgs $test_sigalgs"
-        local tmp=$(echo Q | $sslcommand -sigalgs $test_sigalgs 2>/dev/null)
+        verbose "Test ordering of sigalgs with ${sslcommand[*]} -sigalgs $test_sigalgs"
+        local tmp=$(echo Q | "${sslcommand[@]}" -sigalgs $test_sigalgs 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "server selected $current_cipher, $current_protocol, $current_kex_sigalg"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1860,22 +1867,22 @@ test_kex_sigalgs() {
         test_sigalgs+="RSA+${sigalgs_preferred_rsa[0]}"
 
         # prepare the command to run
-        local sslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client"
+        local sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
         if [ -n "$CAPATH" ]; then
-            sslcommand+=" -CApath $CAPATH -showcerts"
+            sslcommand+=("-CApath" "$CAPATH" "-showcerts")
         elif [ -e "$CACERTS" ]; then
-            sslcommand+=" -CAfile $CACERTS"
+            sslcommand+=("-CAfile" "$CACERTS")
         fi
-        sslcommand+=" -trusted_first $SCLIENTARGS -connect $TARGET"
-        sslcommand+=" -cipher $supported_rsa_ciphers"
+        sslcommand+=("-trusted_first" "${SCLIENTARGS[@]}" "-connect" "$TARGET")
+        sslcommand+=("-cipher" "$supported_rsa_ciphers")
         # since some ciphers supported by server may be SSLv2 only, we need to
         # force use of TLSv1.2, otherwise openssl will send a SSLv2 compatible
         # client hello
-        sslcommand+=" -no_ssl2 -no_ssl3"
+        sslcommand+=("-no_ssl2" "-no_ssl3")
 
         ratelimit
-        verbose "Test ordering of sigalgs with $sslcommand -sigalgs $test_sigalgs"
-        local tmp=$(echo Q | $sslcommand -sigalgs $test_sigalgs 2>/dev/null)
+        verbose "Test ordering of sigalgs with ${sslcommand[*]} -sigalgs $test_sigalgs"
+        local tmp=$(echo Q | "${sslcommand[@]}" -sigalgs $test_sigalgs 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "server selected $current_cipher, $current_protocol, $current_kex_sigalg"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -2026,11 +2033,11 @@ if [[ -e $DIRNAMEPATH/openssl.cnf ]]; then
     export OPENSSL_CONF="$DIRNAMEPATH/openssl.cnf"
 fi
 
-OPENSSLBINHELP="$($OPENSSLBIN s_client -help 2>&1)"
+OPENSSLBINHELP="$("$OPENSSLBIN" s_client -help 2>&1)"
 if [[ $OPENSSLBINHELP =~ :error: ]]; then
     verbose "$OPENSSLBIN can't handle GOST config, disabling"
     unset OPENSSL_CONF
-    OPENSSLBINHELP="$($OPENSSLBIN s_client -help 2>&1)"
+    OPENSSLBINHELP="$("$OPENSSLBIN" s_client -help 2>&1)"
 fi
 
 if ! [[ $OPENSSLBINHELP =~ -connect ]]; then
@@ -2089,14 +2096,14 @@ debug "target: $TARGET"
 
 # test our openssl is usable
 if [[ ! -x $OPENSSLBIN ]]; then
-    OPENSSLBIN=$(which openssl)
+    OPENSSLBIN="$(which openssl)"
     if [[ "$OUTPUTFORMAT" == "terminal" ]]; then
         echo "custom openssl not executable, falling back to system one from $OPENSSLBIN" 1>&2
     fi
 fi
 
 if [[ $TEST_CURVES == "True" ]]; then
-    if [[ ! -z "$($OPENSSLBIN s_client -curves 2>&1|head -1|grep 'unknown option')" ]]; then
+    if [[ ! -z "$("$OPENSSLBIN" s_client -curves 2>&1|head -1|grep 'unknown option')" ]]; then
         echo "curves testing not available with your version of openssl, disabling it" 1>&2
         TEST_CURVES="False"
     fi
@@ -2126,28 +2133,30 @@ fi
 
 if [[ $VERBOSE != 0 ]] ; then
     [[ -n "$CACERTS" ]] && echo "Using trust anchors from $CACERTS"
-    echo "Loading $($OPENSSLBIN ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $($OPENSSLBIN version 2>/dev/null))"
-         $OPENSSLBIN ciphers ALL 2>/dev/null
+    echo "Loading $("$OPENSSLBIN" ciphers -v $CIPHERSUITE 2>/dev/null|grep Kx|wc -l) ciphersuites from $(echo -n $("$OPENSSLBIN" version 2>/dev/null))"
+         "$OPENSSLBIN" ciphers ALL 2>/dev/null
 fi
 
-SCLIENTARGS="${PARAMS[*]}"
+SCLIENTARGS=("${PARAMS[@]}")
 # we need the SNI for cscan, so save it if it was provided through
 # OpenSSL options
-if [[ $SCLIENTARGS =~ servername[\ ]*([^\ ]*)[\ ]* ]]; then
-    sni_target="${BASH_REMATCH[1]}"
-fi
+for i in "${!SCLIENTARGS[@]}"; do
+    if [[ ${SCLIENTARGS[i]} = -servername ]]; then
+        sni_target="${SCLIENTARGS[i+1]}"
+    fi
+done
 # only append the SNI:
 # if the target is a hostname by validating the tld
 # if -servername was not supplied by the user
-if [[ $SNI == "True"  && ! $SCLIENTARGS =~ servername ]]; then
+if [[ $SNI == "True"  && ! "${SCLIENTARGS[*]}" =~ servername ]]; then
     if [[ $sni_target =~ \.[a-zA-Z]{1,20}$ ]]; then
-        SCLIENTARGS="$SCLIENTARGS -servername $sni_target"
+        SCLIENTARGS+=("-servername" "$sni_target")
     else
         echo "Warning: target is not a FQDN. SNI was disabled. Use a FQDN or '-servername <fqdn>'" 1>&2
         sni_target=''
     fi
 fi
-debug "sclientargs: $SCLIENTARGS"
+debug "sclientargs: ${SCLIENTARGS[*]}"
 
 
 cipherspref=()
@@ -2193,9 +2202,9 @@ fi
 # If asked, test every single cipher individually
 if [[ -n $ALLCIPHERS ]]; then
     echo; echo "All accepted ciphersuites"
-    for c in $($OPENSSLBIN ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort -u); do
-        osslcommand="$TIMEOUTBIN $TIMEOUT $OPENSSLBIN s_client $SCLIENTARGS -connect $TARGET -cipher $c"
-        if test_cipher_on_target "$osslcommand"; then
+    for c in $("$OPENSSLBIN" ciphers -v ALL:COMPLEMENTOFALL 2>/dev/null |awk '{print $1}'|sort -u); do
+        osslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client" "${SCLIENTARGS[@]}" "-connect" "$TARGET" "-cipher" "$c")
+        if test_cipher_on_target "${osslcommand[@]}"; then
             r="pass"
         else
             r="fail"
