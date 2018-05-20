@@ -19,7 +19,7 @@
             "tls_curves": [ "prime256v1", "secp384r1", "secp521r1" ],
             "certificate_types": ["ecdsa"],
             "certificate_curves": ["prime256v1", "secp384r1", "secp521r1"],
-            "certificate_signatures": ["sha256WithRSAEncryption", "ecdsa-with-SHA256", "ecdsa-with-SHA384", "ecdsa-with-SHA512"],
+            "certificate_signatures": ["sha256WithRSAEncryption", "sha512WithRSAEncryption", "ecdsa-with-SHA256", "ecdsa-with-SHA384", "ecdsa-with-SHA512"],
             "rsa_key_size": 2048,
             "dh_param_size": null,
             "ecdh_param_size": 256,
