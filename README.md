@@ -1,6 +1,8 @@
 CipherScan
 ==========
 
+[![Build Status](https://travis-ci.org/mozilla/cipherscan.svg?branch=master)](https://travis-ci.org/mozilla/cipherscan)
+
 ![cipherscan](https://pbs.twimg.com/media/CPbjvCFW8AAnUK3.png:large)
 
 Cipherscan tests the ordering of the SSL/TLS ciphers on a given target, for all major versions of SSL and TLS. It also extracts some certificates informations, TLS options, OCSP stapling and more. Cipherscan is a wrapper above the `openssl s_client` command line.
