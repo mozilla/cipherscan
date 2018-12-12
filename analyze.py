@@ -7,10 +7,16 @@
 
 from __future__ import print_function
 
-import sys, os, json, subprocess, logging, argparse, platform, urllib2, re
+import sys, os, json, subprocess, logging, argparse, platform, re
 from collections import namedtuple
 from datetime import datetime
 from copy import deepcopy
+
+try:
+    from urllib2 import urlopen, URLError
+except ModuleNotFoundError:
+    from urllib.request import urlopen
+    from urllib.error import URLError
 
 def str_compat(data):
     if sys.version_info >= (3,0):
@@ -400,10 +406,10 @@ def build_ciphers_lists():
     sstlsurl = "https://statics.tls.security.mozilla.org/server-side-tls-conf.json"
     conf = dict()
     try:
-        raw = urllib2.urlopen(sstlsurl).read()
+        raw = urlopen(sstlsurl).read()
         conf = json.loads(raw)
         logging.debug('retrieving online server side tls recommendations from %s' % sstlsurl)
-    except urllib2.URLError:
+    except URLError:
         with open('server-side-tls-conf.json', 'r') as f:
             conf = json.load(f)
             logging.debug('Error connecting to %s; using local archive of server side tls recommendations' % sstlsurl)
