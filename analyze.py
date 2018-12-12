@@ -223,7 +223,7 @@ def is_intermediate(results):
         failures[lvl].append("use a certificate signed with %s" % " or ".join(inter["certificate_signatures"]))
         isinter = False
     if not has_pfs:
-        failures[lvl].append("consider using DHE of at least 2048bits and ECC of 256bits and greater")
+        failures[lvl].append("consider using DHE of at least 2048bits and ECC 256bit and greater")
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
     if results['serverside'] != 'True':
@@ -272,7 +272,7 @@ def is_modern(results):
         failures[lvl].append("use a certificate signed with %s" % " or ".join(modern["certificate_signatures"]))
         ismodern = False
     if not has_pfs:
-        failures[lvl].append("use DHE of at least 2048bits and ECC of at 256bits and greater")
+        failures[lvl].append("use DHE of at least 2048bits and ECC 256bit and greater")
         ismodern = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
