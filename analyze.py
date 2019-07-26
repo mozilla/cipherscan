@@ -63,7 +63,7 @@ def is_fubar(results):
         pubkey_bits = int(conn['pubkey'][0])
         ec_kex = re.match(r"(ECDHE|EECDH|ECDH)-", conn['cipher'])
 
-        if conn['cipher'] not in (set(old["ciphersuites"]) | set(inter["ciphersuites"]) | set(modern["ciphersuites"])):
+        if conn['cipher'] not in (set(old["openssl_ciphersuites"]) | set(inter["openssl_ciphersuites"]) | set(modern["openssl_ciphersuites"])):
             failures[lvl].append("remove cipher " + conn['cipher'])
             logging.debug(conn['cipher'] + ' is in the list of fubar ciphers')
             fubar = True
@@ -121,7 +121,7 @@ def is_old(results):
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
         # flag unwanted ciphers
-        if conn['cipher'] not in old["ciphersuites"]:
+        if conn['cipher'] not in old["openssl_ciphersuites"]:
             logging.debug(conn['cipher'] + ' is not in the list of old ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
             isold = False
@@ -183,7 +183,7 @@ def is_intermediate(results):
     all_proto = []
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
-        if conn['cipher'] not in inter["ciphersuites"]:
+        if conn['cipher'] not in inter["openssl_ciphersuites"]:
             logging.debug(conn['cipher'] + ' is not in the list of intermediate ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
             isinter = False
@@ -242,7 +242,7 @@ def is_modern(results):
     all_proto = []
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
-        if conn['cipher'] not in modern["ciphersuites"]:
+        if conn['cipher'] not in modern["openssl_ciphersuites"]:
             logging.debug(conn['cipher'] + ' is not in the list of modern ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
             ismodern = False
@@ -311,17 +311,17 @@ def evaluate_all(results):
 
     if is_old(results):
         status = "old"
-        if not is_ordered(results, old["ciphersuites"], "old"):
+        if not is_ordered(results, old["openssl_ciphersuites"], "old"):
             status = "old with bad ordering"
 
     if is_intermediate(results):
         status = "intermediate"
-        if not is_ordered(results, inter["ciphersuites"], "intermediate"):
+        if not is_ordered(results, inter["openssl_ciphersuites"], "intermediate"):
             status = "intermediate with bad ordering"
 
     if is_modern(results):
         status = "modern"
-        if not is_ordered(results, modern["ciphersuites"], "modern"):
+        if not is_ordered(results, modern["openssl_ciphersuites"], "modern"):
             status = "modern with bad ordering"
 
     if is_fubar(results):
