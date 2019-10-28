@@ -63,7 +63,7 @@ def is_fubar(results):
         pubkey_bits = int(conn['pubkey'][0])
         ec_kex = re.match(r"(ECDHE|EECDH|ECDH)-", conn['cipher'])
 
-        if conn['cipher'] not in (set(old["openssl_ciphersuites"]) | set(inter["openssl_ciphersuites"]) | set(modern["openssl_ciphersuites"])):
+        if conn['cipher'] not in (set(old["openssl_ciphers"]) | set(inter["openssl_ciphers"]) | set(modern["openssl_ciphers"])):
             failures[lvl].append("remove cipher " + conn['cipher'])
             logging.debug(conn['cipher'] + ' is in the list of fubar ciphers')
             fubar = True
@@ -121,7 +121,7 @@ def is_old(results):
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
         # flag unwanted ciphers
-        if conn['cipher'] not in old["openssl_ciphersuites"]:
+        if conn['cipher'] not in old["openssl_ciphers"]:
             logging.debug(conn['cipher'] + ' is not in the list of old ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
             isold = False
@@ -165,8 +165,9 @@ def is_old(results):
         isold = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
-    if results['serverside'] != 'True':
-        failures[lvl].append("enforce server side ordering")
+    if results['serverside'] != ('True' if old['server_preferred_order'] else 'False'):
+        failures[lvl].append("enforce server side ordering" if old['server_preferred_order'] else "enforce client side ordering")
+        isold = False
     return isold
 
 # is_intermediate is similar to is_old but for intermediate configuration from
@@ -176,19 +177,16 @@ def is_intermediate(results):
     lvl = 'intermediate'
     isinter = True
     has_tls1 = False
-    has_aes = False
     has_pfs = True
     has_sigalg = True
     has_ocsp = True
     all_proto = []
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
-        if conn['cipher'] not in inter["openssl_ciphersuites"]:
+        if conn['cipher'] not in inter["openssl_ciphers"]:
             logging.debug(conn['cipher'] + ' is not in the list of intermediate ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
             isinter = False
-        if conn['cipher'] == 'AES128-SHA':
-            has_aes = True
         for proto in conn['protocols']:
             if proto not in all_proto:
                 all_proto.append(proto)
@@ -198,7 +196,7 @@ def is_intermediate(results):
             logging.debug(conn['sigalg'][0] + ' is a not an intermediate signature')
             has_sigalg = False
         if conn['pfs'] != 'None':
-            if not has_good_pfs(conn['pfs'], inter["dh_param_size"], inter["ecdh_param_size"], True):
+            if not has_good_pfs(conn['pfs'], inter["dh_param_size"], inter["ecdh_param_size"]):
                 logging.debug(conn['pfs']+ ' is not a good PFS parameter for the intermediate configuration')
                 has_pfs = False
         if conn['ocsp_stapling'] == 'False':
@@ -212,13 +210,6 @@ def is_intermediate(results):
     for proto in missing_proto:
         logging.debug("missing protocol wanted in the intermediate configuration:" + proto)
         failures[lvl].append('consider enabling ' + proto)
-    if not has_tls1:
-        logging.debug("TLSv1 is not supported and required by the old configuration")
-        isinter = False
-    if not has_aes:
-        logging.debug("AES128-SHA is not supported and required by the intermediate configuration")
-        failures[lvl].append("add cipher AES128-SHA")
-        isinter = False
     if not has_sigalg:
         failures[lvl].append("use a certificate signed with %s" % " or ".join(inter["certificate_signatures"]))
         isinter = False
@@ -226,8 +217,9 @@ def is_intermediate(results):
         failures[lvl].append("consider using DHE of at least 2048bits and ECC 256bit and greater")
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
-    if results['serverside'] != 'True':
-        failures[lvl].append("enforce server side ordering")
+    if results['serverside'] != ('True' if inter['server_preferred_order'] else 'False'):
+        failures[lvl].append("enforce server side ordering" if inter['server_preferred_order'] else "enforce client side ordering")
+        isinter = False
     return isinter
 
 # is_modern is similar to is_old but for modern configuration from
@@ -242,7 +234,7 @@ def is_modern(results):
     all_proto = []
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
-        if conn['cipher'] not in modern["openssl_ciphersuites"]:
+        if conn['cipher'] not in modern["openssl_ciphers"]:
             logging.debug(conn['cipher'] + ' is not in the list of modern ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
             ismodern = False
@@ -276,8 +268,9 @@ def is_modern(results):
         ismodern = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
-    if results['serverside'] != 'True':
-        failures[lvl].append("enforce server side ordering")
+    if results['serverside'] != ('True' if modern['server_preferred_order'] else 'False'):
+        failures[lvl].append("enforce server side ordering" if modern['server_preferred_order'] else "enforce client side ordering")
+        ismodern = False
     return ismodern
 
 def is_ordered(results, ref_ciphersuite, lvl):
@@ -311,17 +304,17 @@ def evaluate_all(results):
 
     if is_old(results):
         status = "old"
-        if not is_ordered(results, old["openssl_ciphersuites"], "old"):
+        if old["server_preferred_order"] and not is_ordered(results, old["openssl_ciphers"], "old"):
             status = "old with bad ordering"
 
     if is_intermediate(results):
         status = "intermediate"
-        if not is_ordered(results, inter["openssl_ciphersuites"], "intermediate"):
+        if inter["server_preferred_order"] and not is_ordered(results, inter["openssl_ciphers"], "intermediate"):
             status = "intermediate with bad ordering"
 
     if is_modern(results):
         status = "modern"
-        if not is_ordered(results, modern["openssl_ciphersuites"], "modern"):
+        if modern["server_preferred_order"] and not is_ordered(results, modern["openssl_ciphers"], "modern"):
             status = "modern with bad ordering"
 
     if is_fubar(results):
