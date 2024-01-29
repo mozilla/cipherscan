@@ -221,7 +221,7 @@ Contributors
 * Michael Zeltner <m@niij.org>
 * Peter Mosmans <support@go-forward.net>
 * Vincent Riquer <v.riquer@b2f-concept.com>
-* Christian Stadelmann <dev@genodeftest.de>
+* Christian Stadelmann
 * Simon Deziel <simon.deziel@gmail.com>
 * Aaron Zauner <azet@azet.org>
 * Mike <mikedawg@gmail.com>
