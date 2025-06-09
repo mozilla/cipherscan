@@ -31,6 +31,7 @@ else
     case "$(uname -s)" in
         Darwin)
             opensslbin_name="openssl-darwin64"
+            openssl_legacy_bin_name="openssl-darwin64"
 
             READLINKBIN=$(which greadlink 2>/dev/null)
             if [[ -z $READLINKBIN ]]; then
@@ -45,6 +46,7 @@ else
             ;;
         *)
             opensslbin_name="openssl"
+            openssl_legacy_bin_name="openssl.legacy"
 
             # test that readlink or greadlink (darwin) are present
             READLINKBIN="$(which readlink)"
@@ -125,6 +127,16 @@ SHORTCIPHERSUITE=(
 )
 join_array_by_char ':' "${SHORTCIPHERSUITE[@]}"
 SHORTCIPHERSUITESTRING="$joined_array"
+
+# TLS 1.3 is different from other versions of the protocol and
+# ciphersuites must be passed to openssl explicitely
+TLS13CIPHERSUITE=(
+    'TLS_AES_256_GCM_SHA384'
+    'TLS_AES_128_GCM_SHA256'
+    'TLS_CHACHA20_POLY1305_SHA256'
+    'TLS_AES_128_CCM_SHA256'
+    'TLS_AES_128_CCM_8_SHA256'
+)
 
 # as some servers are intolerant to large client hello's (or ones that have
 # RC4 ciphers below position 64), use the following for cipher testing in case
@@ -367,6 +379,20 @@ check_option_support() {
     [[ $OPENSSLBINHELP =~ "$1" ]]
 }
 
+init_result_vars() {
+    cipher=""
+    protocols=""
+    pubkey=""
+    sigalg=""
+    trusted=""
+    tickethint=""
+    ocspstaple=""
+    npn=""
+    pfs=""
+    current_curves=""
+    curves_ordering=""
+}
+
 parse_openssl_output() {
     # clear variables in case matching doesn't hit them
     current_ocspstaple="False"
@@ -408,10 +434,15 @@ parse_openssl_output() {
             current_npn="${BASH_REMATCH[1]// /}"
             continue
         fi
+        if [[ $line =~ ALPN\ protocol:\ (.*) ]]; then
+            current_npn="${BASH_REMATCH[1]}"
+            continue
+        fi
 
-        # extract selected cipher
+        # extract selected protocol and cipher
         if [[ $line =~ New,\  ]]; then
             local match=($line)
+            current_protocol="${match[1]%%,}"
             current_cipher="${match[4]}"
             continue
         fi
@@ -447,7 +478,7 @@ parse_openssl_output() {
         fi
 
         # extract used protocol
-        if [[ $line =~ ^Protocol\ + ]]; then
+        if [[ $line =~ Protocol\ + ]]; then
             local match=($line)
             current_protocol="${match[2]}"
             continue
@@ -500,15 +531,156 @@ parse_openssl_output() {
     fi
 }
 
+
+process_results() {
+    # collect certificate data
+    current_certificates=""
+    local certificate_count=$certs_found
+    debug "server presented $certificate_count certificates"
+    local i
+    for ((i=0; i<certificate_count; i=i+1 )); do
+ 
+        # extract i'th certificate
+        local cert="${current_raw_certificates[$i]}"
+        # put the output to an array instead running awk '{print $1}'
+        local cksum=($(cksum <<<"$cert"))
+        # compare the values not just checksums so that eventual collision
+        # doesn't mess up results
+        if [[ ${known_certs[$cksum]} == "$cert" ]]; then
+            if [[ -n "${current_certificates}" ]]; then
+                current_certificates+=","
+            fi
+            current_certificates+="\"${cert_checksums[$cksum]}\""
+            continue
+        fi
+ 
+        # compute sha256 fingerprint of the certificate
+        local sha256sum=($("${OPENSSLBIN}" x509 -outform DER\
+            <<<"$cert" 2>/dev/null |\
+            "${OPENSSLBIN}" dgst -sha256 -r 2>/dev/null))
+ 
+        # check if it is a CA certificate
+        local isCA="False"
+        if "${OPENSSLBIN}" x509 -noout -text <<<"$cert" 2>/dev/null |\
+            grep 'CA:TRUE' >/dev/null; then
+            isCA="True"
+        fi
+ 
+        # build trust source for certificate verification
+        local trust_source=()
+        if [[ -n $CAPATH ]]; then
+            trust_source=("-CApath" "$CAPATH")
+        elif [[ -e $CACERTS ]]; then
+            trust_source=("-CAfile" "$CACERTS")
+        fi
+ 
+        # check if the certificate is actually trusted (server may present
+        # unrelated certificates that are not trusted (including self
+        # signed ones)
+        local saved="False"
+        if "${OPENSSLBIN}" verify "${trust_source[@]}" \
+            -untrusted <(printf "%s" "${current_raw_certificates[@]}") \
+            <(echo "$cert") 2>/dev/null | \
+            grep ': OK$' >/dev/null; then
+ 
+            # if the certificate is an intermediate CA it may be useful
+            # for connecting to servers that are misconfigured so save it
+            if [[ -n $CAPATH ]] && [[ $SAVECA == "True" ]] && [[ $isCA == "True" ]]; then
+                if [[ ! -e "$CAPATH/${sha256sum}.pem" ]]; then
+                    echo "$cert" > "$CAPATH/${sha256sum}.pem"
+                    c_hash "$CAPATH" "${sha256sum}.pem"
+                fi
+                saved="True"
+            fi
+        fi
+        if [[ -n $SAVECRT ]] && [[ $saved == "False" ]]; then
+            if [[ ! -e $SAVECRT/${sha256sum}.pem ]]; then
+                echo "$cert" > "$SAVECRT/${sha256sum}.pem"
+            fi
+        fi
+        # save the sha sum for reporting
+        if [[ -n "${current_certificates}" ]]; then
+            current_certificates+=","
+        fi
+        current_certificates+="\"${sha256sum}\""
+        known_certs[$cksum]="$cert"
+        cert_checksums[$cksum]="$sha256sum"
+    done
+    debug "current_certificates: $current_certificates"
+}
+
+return_results() {
+    # if cipher is empty, that means none of the TLS version worked with
+    # the current cipher
+    if [[ -z "$cipher" ]]; then
+        verbose "handshake failed, no ciphersuite was returned"
+        result='ConnectionFailure'
+        return 2
+
+    # if cipher contains NONE, the cipher wasn't accepted
+    elif [[ "$cipher" =~ NONE ]]; then
+        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $npn $pfs $current_curves $curves_ordering"
+        verbose "handshake failed, server returned ciphersuite '$result'"
+        return 1
+
+    # the connection succeeded
+    else
+        current_curves="None"
+        # if pfs uses ECDH, test supported curves
+        if [[ $pfs =~ ECDH ]]; then
+            has_curves="True"
+            if [[ $TEST_CURVES == "True" ]]; then
+                test_curves
+                if [[ -n $ecc_ciphers ]]; then
+                    ecc_ciphers+=":"
+                fi
+                ecc_ciphers+="$cipher"
+            else
+                # resolve the openssl curve to the proper IANA name
+                current_curves="$(get_curve_name "$(echo $pfs|cut -d ',' -f2)")"
+                curves_ordering="unknown"
+            fi
+        fi
+        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $npn $pfs $current_curves $curves_ordering"
+        verbose "handshake succeeded, server returned ciphersuite '$result'"
+        return 0
+    fi
+}
+
+test_tls13_cipher_on_target() {
+    init_result_vars
+    local sslcommand=("$@")
+    ratelimit
+    debug echo \"Q\" \| "${sslcommand[@]}" $tls_version
+    local tmp=$(echo "Q" | "${sslcommand[@]}" $tls_version 1>/dev/stdout 2>/dev/null)
+
+    parse_openssl_output <<<"$tmp"
+    cipher=$current_cipher
+    protocols=$current_protocol
+    pfs=$current_pfs
+    pubkey=$current_pubkey
+    sigalg=$current_sigalg
+    trusted=$current_trusted
+    tickethint=$current_tickethint
+    ocspstaple=$current_ocspstaple
+    npn="$current_npn"
+    certificates="$current_certificates"
+
+    process_results
+    certificates=$current_certificates
+
+    verbose "selected cipher is '$cipher'"
+    verbose "using protocol '$protocols'"
+    
+    return_results
+}
+
 # Connect to a target host with the selected ciphersuite
 test_cipher_on_target() {
-    local sslcommand=("$@")
-    cipher=""
-    local cmnd
-    protocols=""
-    pfs=""
+    init_result_vars
     previous_cipher=""
-    certificates=""
+    local sslcommand=("$@")
+    local cmnd
     for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
     do
         cmnd=("${sslcommand[@]}")
@@ -524,6 +696,14 @@ test_cipher_on_target() {
                 fi
             done
         fi
+
+        # we need openssl.legacy to test for these old protocols
+        if [[ "$tls_version" != "-tls1_2" ]]; then
+            cmnd[2]=$OPENSSLLEGACYBIN
+        else
+            cmnd+=('-nextprotoneg' 'http/1.1')
+        fi
+
         ratelimit
         debug echo \"Q\" \| "${cmnd[@]}" $tls_version
         local tmp=$(echo "Q" | "${cmnd[@]}" $tls_version 1>/dev/stdout 2>/dev/null)
@@ -532,80 +712,7 @@ test_cipher_on_target() {
         verbose "selected cipher is '$current_cipher'"
         verbose "using protocol '$current_protocol'"
 
-        # collect certificate data
-        current_certificates=""
-        local certificate_count=$certs_found
-        debug "server presented $certificate_count certificates"
-        local i
-        for ((i=0; i<certificate_count; i=i+1 )); do
-
-            # extract i'th certificate
-            local cert="${current_raw_certificates[$i]}"
-            # put the output to an array instead running awk '{print $1}'
-            local cksum=($(cksum <<<"$cert"))
-            # compare the values not just checksums so that eventual collision
-            # doesn't mess up results
-            if [[ ${known_certs[$cksum]} == "$cert" ]]; then
-                if [[ -n "${current_certificates}" ]]; then
-                    current_certificates+=","
-                fi
-                current_certificates+="\"${cert_checksums[$cksum]}\""
-                continue
-            fi
-
-            # compute sha256 fingerprint of the certificate
-            local sha256sum=($("${OPENSSLBIN}" x509 -outform DER\
-                <<<"$cert" 2>/dev/null |\
-                "${OPENSSLBIN}" dgst -sha256 -r 2>/dev/null))
-
-            # check if it is a CA certificate
-            local isCA="False"
-            if "${OPENSSLBIN}" x509 -noout -text <<<"$cert" 2>/dev/null |\
-                grep 'CA:TRUE' >/dev/null; then
-                isCA="True"
-            fi
-
-            # build trust source for certificate verification
-            local trust_source=()
-            if [[ -n $CAPATH ]]; then
-                trust_source=("-CApath" "$CAPATH")
-            elif [[ -e $CACERTS ]]; then
-                trust_source=("-CAfile" "$CACERTS")
-            fi
-
-            # check if the certificate is actually trusted (server may present
-            # unrelated certificates that are not trusted (including self
-            # signed ones)
-            local saved="False"
-            if "${OPENSSLBIN}" verify "${trust_source[@]}" \
-                -untrusted <(printf "%s" "${current_raw_certificates[@]}") \
-                <(echo "$cert") 2>/dev/null | \
-                grep ': OK$' >/dev/null; then
-
-                # if the certificate is an intermediate CA it may be useful
-                # for connecting to servers that are misconfigured so save it
-                if [[ -n $CAPATH ]] && [[ $SAVECA == "True" ]] && [[ $isCA == "True" ]]; then
-                    if [[ ! -e "$CAPATH/${sha256sum}.pem" ]]; then
-                        echo "$cert" > "$CAPATH/${sha256sum}.pem"
-                        c_hash "$CAPATH" "${sha256sum}.pem"
-                    fi
-                    saved="True"
-                fi
-            fi
-            if [[ -n $SAVECRT ]] && [[ $saved == "False" ]]; then
-                if [[ ! -e $SAVECRT/${sha256sum}.pem ]]; then
-                    echo "$cert" > "$SAVECRT/${sha256sum}.pem"
-                fi
-            fi
-            # save the sha sum for reporting
-            if [[ -n "${current_certificates}" ]]; then
-                current_certificates+=","
-            fi
-            current_certificates+="\"${sha256sum}\""
-            known_certs[$cksum]="$cert"
-            cert_checksums[$cksum]="$sha256sum"
-        done
-        debug "current_certificates: $current_certificates"
+        process_results
 
         # parsing finished, report result
         if [[ -z "$current_protocol" || "$current_cipher" == '(NONE)' ]]; then
@@ -638,42 +745,10 @@ test_cipher_on_target() {
         certificates="$current_certificates"
         # grab the cipher and PFS key size
     done
-    # if cipher is empty, that means none of the TLS version worked with
-    # the current cipher
-    if [[ -z "$cipher" ]]; then
-        verbose "handshake failed, no ciphersuite was returned"
-        result='ConnectionFailure'
-        return 2
 
-    # if cipher contains NONE, the cipher wasn't accepted
-    elif [[ "$cipher" == '(NONE)  ' ]]; then
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $npn $pfs $current_curves $curves_ordering"
-        verbose "handshake failed, server returned ciphersuite '$result'"
-        return 1
-
-    # the connection succeeded
-    else
-        current_curves="None"
-        # if pfs uses ECDH, test supported curves
-        if [[ $pfs =~ ECDH ]]; then
-            has_curves="True"
-            if [[ $TEST_CURVES == "True" ]]; then
-                test_curves
-                if [[ -n $ecc_ciphers ]]; then
-                    ecc_ciphers+=":"
-                fi
-                ecc_ciphers+="$cipher"
-            else
-                # resolve the openssl curve to the proper IANA name
-                current_curves="$(get_curve_name "$(echo $pfs|cut -d ',' -f2)")"
-                curves_ordering="unknown"
-            fi
-        fi
-        result="$cipher $protocols $pubkey $sigalg $trusted $tickethint $ocspstaple $npn $pfs $current_curves $curves_ordering"
-        verbose "handshake succeeded, server returned ciphersuite '$result'"
-        return 0
-    fi
+    return_results
 }
+
 
 # Calculate the average handshake time for a specific ciphersuite
 bench_cipher() {
@@ -698,6 +773,42 @@ bench_cipher() {
     cipherbenchms="$((t/1000/BENCHMARKITER))"
 }
 
+# Connect to the target with TLS1.3 and retrieve the chosen cipher
+# recursively until the connection fails
+get_tls13_cipher_pref() {
+    [[ "$OUTPUTFORMAT" == "terminal" ]] && [[ $DEBUG -lt 1 ]] && echo -n '.'
+    local tls13ciphersuite=("$@")
+    join_array_by_char ':' "${tls13ciphersuite[@]}"
+    local tls13ciphersuitestring="$joined_array"
+
+    local sslcommand
+    sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
+    if [[ -n "$CAPATH" ]]; then
+        sslcommand+=("-CApath" "$CAPATH" "-showcerts")
+    elif [[ -e $CACERTS ]]; then
+        sslcommand+=("-CAfile" "$CACERTS")
+    fi
+    sslcommand+=("-trusted_first" "-status" "${SCLIENTARGS[@]}" "-connect" "$TARGET")
+    sslcommand+=("-tls1_3" "-ciphersuites" "$tls13ciphersuitestring" "-alpn" "http/1.1,h2")
+
+    verbose "Connecting to '$TARGET' with tls1.3 ciphersuite '$tls13ciphersuitestring'"
+    # If the connection succeeded with the current cipher, benchmark and store
+    if test_tls13_cipher_on_target "${sslcommand[@]}"; then
+        cipherspref=("${cipherspref[@]}" "$result")
+        ciphercertificates=("${ciphercertificates[@]}" "$certificates")
+        pciph=($result)
+        # remove previous cipher from tls13 ciphersuites
+        for i in "${!tls13ciphersuite[@]}"; do
+            if [[ ${tls13ciphersuite[i]} = "$pciph" ]]; then
+                unset 'tls13ciphersuite[i]'
+            fi
+        done
+
+        get_tls13_cipher_pref "${tls13ciphersuite[@]}"
+        return 0
+    fi
+}
+
 # Connect to the target and retrieve the chosen cipher
 # recursively until the connection fails
 get_cipher_pref() {
@@ -712,7 +823,7 @@ get_cipher_pref() {
         sslcommand+=("-CAfile" "$CACERTS")
     fi
     sslcommand+=("-trusted_first" "-status" "${SCLIENTARGS[@]}" "-connect" "$TARGET")
-    sslcommand+=("-cipher" "$ciphersuite" "-nextprotoneg" "http/1.1")
+    sslcommand+=("-cipher" "$ciphersuite")
 
     verbose "Connecting to '$TARGET' with ciphersuite '$ciphersuite'"
     # If the connection succeeded with the current cipher, benchmark and store
@@ -1170,7 +1281,7 @@ test_curves() {
     sslcommand+=("-trusted_first")
     # force the TLS to send a TLS1.0 client hello at least, as with SSLv2
     # ciphers present it will try to send a SSLv2 compatible client hello
-    sslcommand+=("-no_ssl2" "-no_ssl3")
+    sslcommand+=("-no_ssl3")
 
     #
     # here we use the same logic as with detecting cipher suites: first
@@ -1343,10 +1454,10 @@ test_tls_tolerance() {
     # curves, full list of ciphers, NPN, ALPN
     #
     declare -A tls_vers_tests
-    tls_vers_tests['big-TLSv1.2']=""
-    tls_vers_tests['big-TLSv1.1']="-no_tls1_2"
-    tls_vers_tests['big-TLSv1.0']="-no_tls1_2 -no_tls1_1"
-    tls_vers_tests['big-SSLv3']="-no_tls1_2 -no_tls1_1 -no_tls1"
+    tls_vers_tests['big-TLSv1.2']="-no-tls1_3"
+    tls_vers_tests['big-TLSv1.1']="-no-tls1_3 -no_tls1_2"
+    tls_vers_tests['big-TLSv1.0']="-no-tls1_3 -no_tls1_2 -no_tls1_1"
+    tls_vers_tests['big-SSLv3']="-no-tls1_3 -no_tls1_2 -no_tls1_1 -no_tls1"
 
     local sslcommand
     sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$OPENSSLBIN" "s_client")
@@ -1439,8 +1550,8 @@ test_tls_tolerance() {
         # v2, small but with TLS1.1 as max version
         #
         ratelimit
-        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2"
-        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_3 -no_tls1_2"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_3 -no_tls1_2 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1454,8 +1565,8 @@ test_tls_tolerance() {
         # v2, small but with TLS1.0 as max version
         #
         ratelimit
-        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2 -no_tls1_1"
-        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 -no_tls1_1 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_3 -no_tls1_2 -no_tls1_1"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_3 -no_tls1_2 -no_tls1_1 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1469,8 +1580,8 @@ test_tls_tolerance() {
         # v2, small but with SSLv3 as max version
         #
         ratelimit
-        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2 -no_tls1_1 -no_tls1"
-        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 -no_tls1_1 -no_tls1 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_3 -no_tls1_2 -no_tls1_1 -no_tls1"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_3 -no_tls1_2 -no_tls1_1 -no_tls1 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1511,8 +1622,8 @@ test_tls_tolerance() {
         # v3 format TLSv1.1 hello, small cipher list
         #
         ratelimit
-        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2"
-        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_3 -no_tls1_2"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_3 -no_tls1_2 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1526,8 +1637,8 @@ test_tls_tolerance() {
         # v3 format TLSv1.0 hello, small cipher list
         #
         ratelimit
-        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2 -no_tls1_1"
-        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 -no_tls1_1 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_3 -no_tls1_2 -no_tls1_1"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_3 -no_tls1_2 -no_tls1_1 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1542,8 +1653,8 @@ test_tls_tolerance() {
         #
         if check_option_support "-no_tlsext"; then
             ratelimit
-            verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2 -no_tls1_1 -no_tlsext"
-            local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 -no_tls1_1 -no_tlsext 2>/dev/null)
+            verbose "Testing fallback with ${sslcommand[*]} -no_tls1_3 -no_tls1_2 -no_tls1_1 -no_tlsext"
+            local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_3 -no_tls1_2 -no_tls1_1 -no_tlsext 2>/dev/null)
             parse_openssl_output <<<"$tmp"
             verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
             if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -1558,8 +1669,8 @@ test_tls_tolerance() {
         # v3 format SSLv3 hello, small cipher list
         #
         ratelimit
-        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_2 -no_tls1_1 -no_tls1"
-        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_2 -no_tls1_1 -no_tls1 2>/dev/null)
+        verbose "Testing fallback with ${sslcommand[*]} -no_tls1_3 -no_tls1_2 -no_tls1_1 -no_tls1"
+        local tmp=$(echo Q | "${sslcommand[@]}" -no_tls1_3 -no_tls1_2 -no_tls1_1 -no_tls1 2>/dev/null)
         parse_openssl_output <<<"$tmp"
         verbose "Negotiated proto: $current_protocol, cipher: $current_cipher"
         if [[ -z $current_protocol || $current_cipher == "(NONE)" \
@@ -2027,6 +2138,10 @@ if [[ -z $OPENSSLBIN ]]; then
     if ! [[ -x "${OPENSSLBIN}" ]]; then
         OPENSSLBIN="$(which openssl)"  # fallback to generic openssl
     fi
+    OPENSSLLEGACYBIN="${REALPATH}/${openssl_legacy_bin_name}"
+    if ! [[ -x "${OPENSSLLEGACYBIN}" ]]; then
+        OPENSSLLEGACYBIN="$(which openssl)"  # fallback to generic openssl
+    fi
 fi
 # use custom config file to enable GOST ciphers
 if [[ -e $DIRNAMEPATH/openssl.cnf ]]; then
@@ -2164,6 +2279,7 @@ ciphercertificates=()
 results=()
 
 # Call to the recursive loop that retrieves the cipher preferences
+get_tls13_cipher_pref "${TLS13CIPHERSUITE[@]}"
 get_cipher_pref $CIPHERSUITE
 
 # in case the server is intolerant to our big hello, try again with

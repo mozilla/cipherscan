@@ -1,4 +1,11 @@
-dist: trusty
+dist: xenial
 language: python
 script:
 - ./cipherscan google.com
+- |
+    if [ "$(./cipherscan -j cloudflare.com | jq -r '.ciphersuite[0].protocols[0]')" == "TLS1.3" ]; then
+        echo successfully detected TLS1.3 on cloudflare.com
+    else
+        echo failed to detect TLS1.3 on cloudflare.com
+        exit 1
+    fi
