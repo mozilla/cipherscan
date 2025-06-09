@@ -63,7 +63,7 @@ def is_fubar(results):
         pubkey_bits = int(conn['pubkey'][0])
         ec_kex = re.match(r"(ECDHE|EECDH|ECDH)-", conn['cipher'])
 
-        if conn['cipher'] not in (set(old["openssl_ciphers"]) | set(inter["openssl_ciphers"]) | set(modern["openssl_ciphers"])):
+        if conn['cipher'] not in (set(old["ciphers"]["openssl"]) | set(inter["ciphers"]["openssl"]) | set(modern["ciphers"]["openssl"])):
             failures[lvl].append("remove cipher " + conn['cipher'])
             logging.debug(conn['cipher'] + ' is in the list of fubar ciphers')
             fubar = True
@@ -114,14 +114,14 @@ def is_old(results):
     lvl = 'old'
     isold = True
     has_3des = False
-    has_sha1 = True
+    has_sigalg = True
     has_pfs = True
     has_ocsp = True
     all_proto = []
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
         # flag unwanted ciphers
-        if conn['cipher'] not in old["openssl_ciphers"]:
+        if conn['cipher'] not in old["ciphers"]["openssl"]:
             logging.debug(conn['cipher'] + ' is not in the list of old ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
             isold = False
@@ -131,11 +131,9 @@ def is_old(results):
         for proto in conn['protocols']:
             if proto not in all_proto:
                 all_proto.append(proto)
-        # verify required sha1 signature is used
-        if 'sha1WithRSAEncryption' not in conn['sigalg']:
+        if conn['sigalg'][0] not in old["certificate_signatures"]:
             logging.debug(conn['sigalg'][0] + ' is a not an old signature')
-            has_sha1 = False
-        # verify required pfs parameter is used
+            has_sigalg = False
         if conn['pfs'] != 'None':
             if not has_good_pfs(conn['pfs'], old["dh_param_size"], old["ecdh_param_size"], True):
                 logging.debug(conn['pfs']+ ' is not a good PFS parameter for the old configuration')
@@ -150,14 +148,13 @@ def is_old(results):
     missing_proto = set(old["tls_versions"]) - set(all_proto)
     for proto in missing_proto:
         logging.debug("missing protocol wanted in the old configuration:" + proto)
-        failures[lvl].append('enable ' + proto)
-        isold = False
+        failures[lvl].append('consider enabling ' + proto)
     if not has_3des:
         logging.debug("DES-CBC3-SHA is not supported and required by the old configuration")
         failures[lvl].append("add cipher DES-CBC3-SHA")
         isold = False
-    if not has_sha1:
-        failures[lvl].append("use a certificate with sha1WithRSAEncryption signature")
+    if not has_sigalg:
+        failures[lvl].append("use a certificate signed with %s" % " or ".join(old["certificate_signatures"]))
         isold = False
     if not has_pfs:
         failures[lvl].append("use DHE of {dhe}bits and ECC of {ecdhe}bits".format(
@@ -166,12 +163,12 @@ def is_old(results):
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
     if results['serverside'] != ('True' if old['server_preferred_order'] else 'False'):
-        failures[lvl].append("enforce server side ordering" if old['server_preferred_order'] else "enforce client side ordering")
+        failures[lvl].append("enforce server side ordering" if old['server_preferred_order'] else "allow client preference")
         isold = False
     return isold
 
 # is_intermediate is similar to is_old but for intermediate configuration from
-# https://wiki.mozilla.org/Security/Server_Side_TLS#Intermediate_compatibility_.28default.29
+# https://wiki.mozilla.org/Security/Server_Side_TLS#Intermediate_compatibility_.28recommended.29
 def is_intermediate(results):
     logging.debug('entering intermediate evaluation')
     lvl = 'intermediate'
@@ -183,7 +180,7 @@ def is_intermediate(results):
     all_proto = []
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
-        if conn['cipher'] not in inter["openssl_ciphers"]:
+        if conn['cipher'] not in inter["ciphers"]["openssl"]:
             logging.debug(conn['cipher'] + ' is not in the list of intermediate ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
             isinter = False
@@ -214,12 +211,13 @@ def is_intermediate(results):
         failures[lvl].append("use a certificate signed with %s" % " or ".join(inter["certificate_signatures"]))
         isinter = False
     if not has_pfs:
-        failures[lvl].append("consider using DHE of at least 2048bits and ECC 256bit and greater")
+        failures[lvl].append("use DHE of at least {dhe}bits and ECC of {ecdhe}bits and greater".format(
+            dhe=inter["dh_param_size"], ecdhe=inter["ecdh_param_size"]))
+        isinter = False
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
     if results['serverside'] != ('True' if inter['server_preferred_order'] else 'False'):
-        failures[lvl].append("enforce server side ordering" if inter['server_preferred_order'] else "enforce client side ordering")
-        isinter = False
+        failures[lvl].append("enforce server side ordering" if inter['server_preferred_order'] else "allow client preference")
     return isinter
 
 # is_modern is similar to is_old but for modern configuration from
@@ -234,7 +232,7 @@ def is_modern(results):
     all_proto = []
     for conn in results['ciphersuite']:
         logging.debug('testing connection %s' % conn)
-        if conn['cipher'] not in modern["openssl_ciphers"]:
+        if conn['cipher'] not in modern["ciphers"]["openssl"]:
             logging.debug(conn['cipher'] + ' is not in the list of modern ciphers')
             failures[lvl].append("remove cipher " + conn['cipher'])
             ismodern = False
@@ -247,7 +245,6 @@ def is_modern(results):
         if conn['pfs'] != 'None':
             if not has_good_pfs(conn['pfs'], modern["dh_param_size"], modern["ecdh_param_size"], True):
                 logging.debug(conn['pfs']+ ' is not a good PFS parameter for the modern configuration')
-                ismodern = False
                 has_pfs = False
         if conn['ocsp_stapling'] == 'False':
             has_ocsp = False
@@ -269,8 +266,7 @@ def is_modern(results):
     if not has_ocsp:
         failures[lvl].append("consider enabling OCSP Stapling")
     if results['serverside'] != ('True' if modern['server_preferred_order'] else 'False'):
-        failures[lvl].append("enforce server side ordering" if modern['server_preferred_order'] else "enforce client side ordering")
-        ismodern = False
+        failures[lvl].append("enforce server side ordering" if modern['server_preferred_order'] else "allow client preference")
     return ismodern
 
 def is_ordered(results, ref_ciphersuite, lvl):
@@ -304,17 +300,17 @@ def evaluate_all(results):
 
     if is_old(results):
         status = "old"
-        if old["server_preferred_order"] and not is_ordered(results, old["openssl_ciphers"], "old"):
+        if old["server_preferred_order"] and not is_ordered(results, old["ciphers"]["openssl"], "old"):
             status = "old with bad ordering"
 
     if is_intermediate(results):
         status = "intermediate"
-        if inter["server_preferred_order"] and not is_ordered(results, inter["openssl_ciphers"], "intermediate"):
+        if inter["server_preferred_order"] and not is_ordered(results, inter["ciphers"]["openssl"], "intermediate"):
             status = "intermediate with bad ordering"
 
     if is_modern(results):
         status = "modern"
-        if modern["server_preferred_order"] and not is_ordered(results, modern["openssl_ciphers"], "modern"):
+        if modern["server_preferred_order"] and not is_ordered(results, modern["ciphers"]["openssl"], "modern"):
             status = "modern with bad ordering"
 
     if is_fubar(results):
@@ -396,7 +392,7 @@ def process_results(data, level=None, do_json=False, do_nagios=False):
     return exit_status
 
 def build_ciphers_lists():
-    sstlsurl = "https://statics.tls.security.mozilla.org/server-side-tls-conf.json"
+    sstlsurl = "https://ssl-config.mozilla.org/guidelines/5.7.json"
     conf = dict()
     try:
         raw = urlopen(sstlsurl).read()
