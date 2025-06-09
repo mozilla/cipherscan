@@ -22,7 +22,7 @@ if [[ $UPDATE ]]; then
     popd >/dev/null
 fi
 
-PYTHONPATH=. python cscan.py "$@"
+PYTHONPATH=. python3 cscan.py "$@"
 ret=$?
 popd > /dev/null
 exit $ret
