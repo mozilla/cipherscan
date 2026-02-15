@@ -1,4 +1,0 @@
-dist: trusty
-language: python
-script:
-- ./cipherscan google.com
