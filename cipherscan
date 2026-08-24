@@ -95,6 +95,7 @@ join_array_by_char() {
 # RSA ciphers are put at the end to force Google servers to accept ECDSA ciphers
 # (probably a result of a workaround for the bug in Apple implementation of ECDSA)
 CIPHERSUITE="ALL:COMPLEMENTOFALL:+aRSA"
+TLS13CIPHERSUITES="TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:TLS_AES_128_CCM_SHA256:TLS_AES_128_CCM_8_SHA256"
 # some servers are intolerant to large client hello, try a shorter list of
 # ciphers with them
 SHORTCIPHERSUITE=(
@@ -412,6 +413,7 @@ parse_openssl_output() {
         # extract selected cipher
         if [[ $line =~ New,\  ]]; then
             local match=($line)
+            current_protocol="${match[1]%,}"
             current_cipher="${match[4]}"
             continue
         fi
@@ -509,7 +511,9 @@ test_cipher_on_target() {
     pfs=""
     previous_cipher=""
     certificates=""
-    for tls_version in "-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2"
+    local tls_versions=("-ssl2" "-ssl3" "-tls1" "-tls1_1" "-tls1_2")
+    [[ -n $CIPHERSCAN_TLS_VERSION ]] && tls_versions=("$CIPHERSCAN_TLS_VERSION")
+    for tls_version in "${tls_versions[@]}"
     do
         cmnd=("${sslcommand[@]}")
         # sslv2 client hello doesn't support SNI extension
@@ -680,8 +684,13 @@ bench_cipher() {
     local ciphersuite="$1"
     local sslcommand
     sslcommand+=("${TIMEOUTBIN[@]}" "$TIMEOUT")
-    sslcommand+=("$OPENSSLBIN" "s_client" "${SCLIENTARGS[@]}")
-    sslcommand+=("-connect" "$TARGET" "-cipher" "$ciphersuite")
+    if [[ $ciphersuite == TLS_* ]]; then
+        sslcommand+=("$TLS13OPENSSLBIN" "s_client" "${SCLIENTARGS[@]}")
+        sslcommand+=("-connect" "$TARGET" "-tls1_3" "-ciphersuites" "$ciphersuite")
+    else
+        sslcommand+=("$OPENSSLBIN" "s_client" "${SCLIENTARGS[@]}")
+        sslcommand+=("-connect" "$TARGET" "-cipher" "$ciphersuite")
+    fi
     local t="$(date +%s%N)"
     verbose "Benchmarking handshake on '$TARGET' with ciphersuite '$ciphersuite'"
     for i in $(seq 1 $BENCHMARKITER); do
@@ -722,6 +731,31 @@ get_cipher_pref() {
         pciph=($result)
         get_cipher_pref "!$pciph:$ciphersuite"
         return 0
+    fi
+}
+
+get_tls13_cipher_pref() {
+    [[ "$OUTPUTFORMAT" == "terminal" ]] && [[ $DEBUG -lt 1 ]] && echo -n '.'
+    local ciphersuites="$1"
+    local sslcommand=("${TIMEOUTBIN[@]}" "$TIMEOUT" "$TLS13OPENSSLBIN" "s_client")
+    if [[ -n "$CAPATH" ]]; then
+        sslcommand+=("-CApath" "$CAPATH" "-showcerts")
+    elif [[ -e $CACERTS ]]; then
+        sslcommand+=("-CAfile" "$CACERTS")
+    fi
+    sslcommand+=("-trusted_first" "-status" "${SCLIENTARGS[@]}" "-connect" "$TARGET")
+    sslcommand+=("-ciphersuites" "$ciphersuites")
+
+    verbose "Connecting to '$TARGET' with TLS 1.3 ciphersuites '$ciphersuites'"
+    if OPENSSLBIN="$TLS13OPENSSLBIN" CIPHERSCAN_TLS_VERSION="-tls1_3" test_cipher_on_target "${sslcommand[@]}"; then
+        cipherspref+=("$result")
+        ciphercertificates+=("$certificates")
+        local selected="${result%% *}"
+        local remaining=":$ciphersuites:"
+        remaining="${remaining//:$selected:/:}"
+        remaining="${remaining#:}"
+        remaining="${remaining%:}"
+        [[ -n $remaining ]] && get_tls13_cipher_pref "$remaining"
     fi
 }
 
@@ -2045,6 +2079,19 @@ if ! [[ $OPENSSLBINHELP =~ -connect ]]; then
     exit 1
 fi
 
+TLS13OPENSSLBIN=""
+if [[ $OPENSSLBINHELP =~ -tls1_3 && $OPENSSLBINHELP =~ -ciphersuites ]]; then
+    TLS13OPENSSLBIN="$OPENSSLBIN"
+else
+    SYSTEMOPENSSLBIN="$(command -v openssl)"
+    if [[ -n $SYSTEMOPENSSLBIN ]]; then
+        SYSTEMOPENSSLBINHELP="$("$SYSTEMOPENSSLBIN" s_client -help 2>&1)"
+        if [[ $SYSTEMOPENSSLBINHELP =~ -tls1_3 && $SYSTEMOPENSSLBINHELP =~ -ciphersuites ]]; then
+            TLS13OPENSSLBIN="$SYSTEMOPENSSLBIN"
+        fi
+    fi
+fi
+
 if [[ -n $CAPATH && -n $CACERTS ]]; then
     echo "Both directory and file with CA certificates specified" 1>&2
     exit 1
@@ -2190,6 +2237,12 @@ fi
 
 if [[ $TEST_CURVES == "True" ]]; then
     test_curves_fallback
+fi
+
+if [[ -n $TLS13OPENSSLBIN ]]; then
+    get_tls13_cipher_pref "$TLS13CIPHERSUITES"
+else
+    echo "TLS 1.3 scanning is unavailable: no TLS 1.3-capable OpenSSL was found." 1>&2
 fi
 
 if [[ "$OUTPUTFORMAT" == "json" ]]; then
