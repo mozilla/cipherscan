@@ -398,14 +398,14 @@ def process_results(data, level=None, do_json=False, do_nagios=False):
     return exit_status
 
 def build_ciphers_lists():
-    sstlsurl = "https://statics.tls.security.mozilla.org/server-side-tls-conf.json"
+    sstlsurl = "https://data.tlsref.org/guidelines/latest.json"
     conf = dict()
     try:
         raw = urlopen(sstlsurl).read()
         conf = json.loads(raw)
         logging.debug('retrieving online server side tls recommendations from %s' % sstlsurl)
     except URLError:
-        with open('server-side-tls-conf.json', 'r') as f:
+        with open('data.tlsref.org-guidelines-6.0.json', 'r') as f:
             conf = json.load(f)
             logging.debug('Error connecting to %s; using local archive of server side tls recommendations' % sstlsurl)
     except:
