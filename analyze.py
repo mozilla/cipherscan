@@ -170,8 +170,10 @@ def is_old(results):
         isold = False
     return isold
 
-# is_intermediate is similar to is_old but for intermediate configuration from
-# https://wiki.mozilla.org/Security/Server_Side_TLS#Intermediate_compatibility_.28default.29
+# is_intermediate assumes a configuration *is* intermediate, and will return
+# False if the parameters of an intermediate configuration are not found.
+# Those parameters are defined in
+# https://docs.tlsref.org/server-side-tls.html#intermediate-compatibility
 def is_intermediate(results):
     logging.debug('entering intermediate evaluation')
     lvl = 'intermediate'
@@ -222,8 +224,8 @@ def is_intermediate(results):
         isinter = False
     return isinter
 
-# is_modern is similar to is_old but for modern configuration from
-# https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility
+# is_modern is similar to is_intermediate but for modern configuration from
+# https://docs.tlsref.org/server-side-tls.html#modern-compatibility
 def is_modern(results):
     logging.debug('entering modern evaluation')
     lvl = 'modern'

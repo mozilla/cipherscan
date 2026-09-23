@@ -144,7 +144,7 @@ Analyzing configurations
 ------------------------
 The motivation behind cipherscan is to help operators configure good TLS on their
 endpoints. To help this further, the script `analyze.py` compares the results of
-a cipherscan with the TLS guidelines from https://wiki.mozilla.org/Security/Server_Side_TLS
+a cipherscan with the TLS guidelines from https://docs.tlsref.org/server-side-tls.html
 and output a level and recommendations.
 
 ```bash
@@ -179,7 +179,7 @@ should be corrected.
 `analyze.py` does not make any assumption on what a good level should be. Sites
 operators should know what level they want to match against, based on the
 compatibility level they want to support. Again, refer to
-https://wiki.mozilla.org/Security/Server_Side_TLS for more information.
+https://docs.tlsref.org/server-side-tls.html for more information.
 
 Note on Nagios mode:
 `analyse.py` can be ran as a nagios check with `--nagios`. The exit code will
