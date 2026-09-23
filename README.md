@@ -151,12 +151,6 @@ and output a level and recommendations.
 $ ./analyze.py -t jve.linuxwall.info
 jve.linuxwall.info:443 has intermediate tls
 
-Changes needed to match the old level:
-* consider enabling SSLv3
-* add cipher DES-CBC3-SHA
-* use a certificate with sha1WithRSAEncryption signature
-* consider enabling OCSP Stapling
-
 Changes needed to match the intermediate level:
 * consider enabling OCSP Stapling
 

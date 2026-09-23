@@ -63,7 +63,7 @@ def is_fubar(results):
         pubkey_bits = int(conn['pubkey'][0])
         ec_kex = re.match(r"(ECDHE|EECDH|ECDH)-", conn['cipher'])
 
-        if conn['cipher'] not in (set(old["openssl_ciphers"]) | set(inter["openssl_ciphers"]) | set(modern["openssl_ciphers"])):
+        if conn['cipher'] not in (set(inter["openssl_ciphers"]) | set(modern["openssl_ciphers"])):
             failures[lvl].append("remove cipher " + conn['cipher'])
             logging.debug(conn['cipher'] + ' is in the list of fubar ciphers')
             fubar = True
@@ -85,7 +85,7 @@ def is_fubar(results):
                 fubar = True
                 has_wrong_pfs = True
         for sigalg in conn['sigalg']:
-            if sigalg not in (set(old["certificate_signatures"]) | set(inter["certificate_signatures"]) | set(modern["certificate_signatures"])):
+            if sigalg not in (set(inter["certificate_signatures"]) | set(modern["certificate_signatures"])):
                 logging.debug(sigalg + ' is a fubar cert signature')
                 fubar = True
         if conn['trusted'] == 'False':
@@ -105,70 +105,6 @@ def is_fubar(results):
     if has_wrong_pfs:
         failures[lvl].append("don't use DHE smaller than 1024bits or ECC smaller than 160bits")
     return fubar
-
-# is_old assumes a configuration *is* old, and will return False if
-# the parameters of an old configuration are not found. Those parameters
-# are defined in https://wiki.mozilla.org/Security/Server_Side_TLS#Old_backward_compatibility
-def is_old(results):
-    logging.debug('entering old evaluation')
-    lvl = 'old'
-    isold = True
-    has_3des = False
-    has_sha1 = True
-    has_pfs = True
-    has_ocsp = True
-    all_proto = []
-    for conn in results['ciphersuite']:
-        logging.debug('testing connection %s' % conn)
-        # flag unwanted ciphers
-        if conn['cipher'] not in old["openssl_ciphers"]:
-            logging.debug(conn['cipher'] + ' is not in the list of old ciphers')
-            failures[lvl].append("remove cipher " + conn['cipher'])
-            isold = False
-        # verify required 3des cipher is present
-        if conn['cipher'] == 'DES-CBC3-SHA':
-            has_3des = True
-        for proto in conn['protocols']:
-            if proto not in all_proto:
-                all_proto.append(proto)
-        # verify required sha1 signature is used
-        if 'sha1WithRSAEncryption' not in conn['sigalg']:
-            logging.debug(conn['sigalg'][0] + ' is a not an old signature')
-            has_sha1 = False
-        # verify required pfs parameter is used
-        if conn['pfs'] != 'None':
-            if not has_good_pfs(conn['pfs'], old["dh_param_size"], old["ecdh_param_size"], True):
-                logging.debug(conn['pfs']+ ' is not a good PFS parameter for the old configuration')
-                has_pfs = False
-        if conn['ocsp_stapling'] == 'False':
-            has_ocsp = False
-    extra_proto = set(all_proto) - set(old["tls_versions"])
-    for proto in extra_proto:
-        logging.debug("found protocol not wanted in the old configuration:" + proto)
-        failures[lvl].append('disable ' + proto)
-        isold = False
-    missing_proto = set(old["tls_versions"]) - set(all_proto)
-    for proto in missing_proto:
-        logging.debug("missing protocol wanted in the old configuration:" + proto)
-        failures[lvl].append('enable ' + proto)
-        isold = False
-    if not has_3des:
-        logging.debug("DES-CBC3-SHA is not supported and required by the old configuration")
-        failures[lvl].append("add cipher DES-CBC3-SHA")
-        isold = False
-    if not has_sha1:
-        failures[lvl].append("use a certificate with sha1WithRSAEncryption signature")
-        isold = False
-    if not has_pfs:
-        failures[lvl].append("use DHE of {dhe}bits and ECC of {ecdhe}bits".format(
-            dhe=old["dh_param_size"], ecdhe=old["ecdh_param_size"]))
-        isold = False
-    if not has_ocsp:
-        failures[lvl].append("consider enabling OCSP Stapling")
-    if results['serverside'] != ('True' if old['server_preferred_order'] else 'False'):
-        failures[lvl].append("enforce server side ordering" if old['server_preferred_order'] else "enforce client side ordering")
-        isold = False
-    return isold
 
 # is_intermediate assumes a configuration *is* intermediate, and will return
 # False if the parameters of an intermediate configuration are not found.
@@ -304,11 +240,6 @@ def evaluate_all(results):
     if len(results['ciphersuite']) == 0:
         return "no"
 
-    if is_old(results):
-        status = "old"
-        if old["server_preferred_order"] and not is_ordered(results, old["openssl_ciphers"], "old"):
-            status = "old with bad ordering"
-
     if is_intermediate(results):
         status = "intermediate"
         if inter["server_preferred_order"] and not is_ordered(results, inter["openssl_ciphers"], "intermediate"):
@@ -388,7 +319,7 @@ def process_results(data, level=None, do_json=False, do_nagios=False):
             if do_nagios and exit_status < 2:
                 exit_status = 1
     else:
-        for lvl in ['old', 'intermediate', 'modern']:
+        for lvl in ['intermediate', 'modern']:
            if len(failures[lvl]) > 0:
                 print("\nChanges needed to match the " + lvl + " level:")
                 for failure in failures[lvl]:
@@ -412,8 +343,7 @@ def build_ciphers_lists():
         print("failed to retrieve JSON configurations from %s" % sstlsurl)
         sys.exit(23)
 
-    global old, inter, modern
-    old = conf["configurations"]["old"]
+    global inter, modern
     inter = conf["configurations"]["intermediate"]
     modern = conf["configurations"]["modern"]
 
@@ -431,7 +361,7 @@ def main():
     parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'),
         default=sys.stdout, help='json formatted analysis')
     parser.add_argument('-l', dest='level',
-        help='target configuration level [old, intermediate, modern]')
+        help='target configuration level [intermediate, modern]')
     parser.add_argument('-t', dest='target',
         help='analyze a <target>, invokes cipherscan')
     parser.add_argument('-o', dest='openssl',
